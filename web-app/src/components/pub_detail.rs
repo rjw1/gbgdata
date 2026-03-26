@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use crate::server::get_pub_detail;
-use crate::models::PubDetail;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 

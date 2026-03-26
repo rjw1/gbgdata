@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use crate::server::get_pubs;
-use crate::models::PubSummary;
 use leptos_router::components::A;
 
 #[component]
