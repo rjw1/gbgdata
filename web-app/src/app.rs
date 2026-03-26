@@ -1,5 +1,6 @@
 use crate::components::pub_list::PubList;
 use crate::components::pub_detail::PubDetail;
+use crate::components::near_me::NearMe;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
@@ -31,17 +32,17 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 
 #[component]
 pub fn App() -> impl IntoView {
-    // We don't call provide_meta_context() here because it's called in shell for SSR
-    // and Leptos will handle it during hydration.
-
     view! {
         <Router>
             <main>
                 <nav>
                     <A href="/">"Home"</A>
+                    " | "
+                    <A href="/near-me">"Near Me"</A>
                 </nav>
                 <Routes fallback=|| view! { "Page not found." }>
                     <Route path=path!("/") view=PubList/>
+                    <Route path=path!("/near-me") view=NearMe/>
                     <Route path=path!("/pub/:id") view=PubDetail/>
                 </Routes>
             </main>
