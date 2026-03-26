@@ -2,12 +2,13 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use crate::server::{get_counties, get_county_details, get_pubs_by_location};
+use crate::models::{CountyDetails, PubSummary};
 
 #[component]
 pub fn Breadcrumbs(
-    county: Option<String>,
-    town: Option<String>,
-    outcode: Option<String>,
+    #[prop(into)] county: Option<String>,
+    #[prop(into)] town: Option<String>,
+    #[prop(into)] outcode: Option<String>,
 ) -> impl IntoView {
     view! {
         <nav class="breadcrumbs">
@@ -38,7 +39,7 @@ pub fn ExplorerHome() -> impl IntoView {
                             {list.into_iter().map(|c| {
                                 let name = c.name.clone();
                                 view! {
-                                    <A href=format!("/explore/{}", name) class="category-card">
+                                    <A href=format!("/explore/{}", name) attr:class="category-card">
                                         <h3>{name}</h3>
                                         <p>{c.pub_count} " Pubs"</p>
                                     </A>
@@ -56,7 +57,7 @@ pub fn ExplorerHome() -> impl IntoView {
 #[component]
 pub fn CountyDashboard() -> impl IntoView {
     let params = use_params_map();
-    let county = move || params.get().get("county").cloned().unwrap_or_default();
+    let county = move || params.get().get("county").map(String::from).unwrap_or_default();
     
     let details = Resource::new(
         move || county(),
@@ -67,42 +68,45 @@ pub fn CountyDashboard() -> impl IntoView {
         <div class="explorer-container">
             <Breadcrumbs county=Some(county()) town=None outcode=None />
             <Suspense fallback=|| view! { <p>"Loading county details..."</p> }>
-                {move || details.get().map(|res| match res {
-                    Ok(d) => view! {
-                        <h1>{format!("GBG Pubs in {}", d.name)}</h1>
-                        
-                        <section>
-                            <h2>"Browse by Town"</h2>
-                            <div class="category-grid small">
-                                {d.towns.into_iter().map(|t| {
-                                    let t_name = t.name.clone();
-                                    let c_name = d.name.clone();
-                                    view! {
-                                        <A href=format!("/explore/{}/town/{}", c_name, t_name) class="category-card">
-                                            <h4>{t_name}</h4>
-                                            <p>{t.pub_count}</p>
-                                        </A>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        </section>
+                {move || details.get().map(|res: Result<CountyDetails, ServerFnError>| match res {
+                    Ok(d) => {
+                        let name_title = d.name.clone();
+                        view! {
+                            <h1>{format!("GBG Pubs in {}", name_title)}</h1>
+                            
+                            <section>
+                                <h2>"Browse by Town"</h2>
+                                <div class="category-grid small">
+                                    {d.towns.into_iter().map(|t| {
+                                        let t_name = t.name.clone();
+                                        let c_name = d.name.clone();
+                                        view! {
+                                            <A href=format!("/explore/{}/town/{}", c_name, t_name) attr:class="category-card">
+                                                <h4>{t_name}</h4>
+                                                <p>{t.pub_count}</p>
+                                            </A>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                            </section>
 
-                        <section>
-                            <h2>"Browse by Postcode"</h2>
-                            <div class="category-grid small">
-                                {d.outcodes.into_iter().map(|o| {
-                                    let o_name = o.name.clone();
-                                    let c_name = d.name.clone();
-                                    view! {
-                                        <A href=format!("/explore/{}/outcode/{}", c_name, o_name) class="category-card">
-                                            <h4>{o_name}</h4>
-                                            <p>{o.pub_count}</p>
-                                        </A>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        </section>
-                    }.into_any(),
+                            <section>
+                                <h2>"Browse by Postcode"</h2>
+                                <div class="category-grid small">
+                                    {d.outcodes.into_iter().map(|o| {
+                                        let o_name = o.name.clone();
+                                        let c_name = d.name.clone();
+                                        view! {
+                                            <A href=format!("/explore/{}/outcode/{}", c_name, o_name) attr:class="category-card">
+                                                <h4>{o_name}</h4>
+                                                <p>{o.pub_count}</p>
+                                            </A>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                            </section>
+                        }.into_any()
+                    },
                     Err(e) => view! { <p class="error">{e.to_string()}</p> }.into_any(),
                 })}
             </Suspense>
@@ -113,9 +117,9 @@ pub fn CountyDashboard() -> impl IntoView {
 #[component]
 pub fn LocationPubList() -> impl IntoView {
     let params = use_params_map();
-    let county = move || params.get().get("county").cloned().unwrap_or_default();
-    let town = move || params.get().get("town").cloned();
-    let outcode = move || params.get().get("outcode").cloned();
+    let county = move || params.get().get("county").map(String::from).unwrap_or_default();
+    let town = move || params.get().get("town").map(String::from);
+    let outcode = move || params.get().get("outcode").map(String::from);
 
     let pubs = Resource::new(
         move || (county(), town(), outcode()),
@@ -133,17 +137,17 @@ pub fn LocationPubList() -> impl IntoView {
 
             <div class="pub-grid">
                 <Suspense fallback=|| view! { <p>"Loading pubs..."</p> }>
-                    {move || pubs.get().map(|res| match res {
+                    {move || pubs.get().map(|res: Result<Vec<PubSummary>, ServerFnError>| match res {
                         Ok(list) => list.into_iter().map(|p| {
                             let id = p.id;
                             let name = p.name.clone();
-                            let town = p.town.clone();
-                            let county = p.county.clone();
+                            let town_p = p.town.clone();
+                            let county_p = p.county.clone();
                             let closed = p.closed;
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
-                                    <p>{format!("{}, {}", town, county)}</p>
+                                    <p>{format!("{}, {}", town_p, county_p)}</p>
                                     {if closed {
                                         view! { <span class="badge closed">"Closed"</span> }.into_any()
                                     } else {
