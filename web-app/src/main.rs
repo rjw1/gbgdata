@@ -2,10 +2,13 @@
 #[tokio::main]
 async fn main() {
     use axum::Router;
+    use axum::routing::get;
     use web_app::app::*;
+    use web_app::export::*;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use sqlx::postgres::PgPoolOptions;
+    use tower_http::services::ServeDir;
 
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -18,16 +21,23 @@ async fn main() {
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
+    
+    let state = AppState {
+        leptos_options: leptos_options.clone(),
+        pool: pool.clone(),
+    };
+
     // Generate the list of routes in your Leptos App
     let routes = generate_route_list(App);
-
-    use tower_http::services::ServeDir;
 
     let app = Router::new()
         .nest_service("/pkg", ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)))
         .nest_service("/assets", ServeDir::new(&*leptos_options.site_root))
+        .route("/export/json", get(export_json))
+        .route("/export/csv", get(export_csv))
+        .route("/export/parquet", get(export_parquet))
         .leptos_routes_with_context(
-            &leptos_options,
+            &state,
             routes,
             {
                 let pool = pool.clone();
@@ -48,7 +58,7 @@ async fn main() {
                 move || shell(leptos_options.clone())
             },
         ))
-        .with_state(leptos_options);
+        .with_state(state);
 
     // run our app with hyper
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

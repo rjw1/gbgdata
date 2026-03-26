@@ -13,7 +13,7 @@ pub struct PubSummary {
     pub latest_year: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
 pub struct PubDetail {
     pub id: Uuid,
     pub name: String,
