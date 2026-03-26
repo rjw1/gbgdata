@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use crate::server::get_pub_detail;
+use crate::components::stat_ring::StatRing;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -69,31 +70,35 @@ pub fn PubDetail() -> impl IntoView {
                                             view! { <div class="no-map">"Coordinates not available"</div> }.into_any()
                                         }}
 
+                                        <div class="stats-dashboard">
+                                            <StatRing value=p.last_5_years max=5 label="Last 5 Years".to_string() />
+                                            
+                                            <div class="hero-streak">
+                                                <span class="streak-number">{p.current_streak}</span>
+                                                <span class="streak-label">"Year Streak"</span>
+                                            </div>
+
+                                            <StatRing value=p.last_10_years max=10 label="Last 10 Years".to_string() />
+                                        </div>
+
                                         <div class="stats-card">
-                                            <h2>"GBG Statistics"</h2>
+                                            <h2>"Historical Data"</h2>
                                             <div class="stats-grid">
-                                                <div class="stat-item">
-                                                    <span class="stat-label">"Current Streak"</span>
-                                                    <span class="stat-value">{p.current_streak} " years"</span>
-                                                </div>
-                                                <div class="stat-item">
-                                                    <span class="stat-label">"Last 5 Years"</span>
-                                                    <span class="stat-value">{format!("{} / 5", p.last_5_years)}</span>
-                                                    <div class="progress-bar"><div class="progress" style=format!("width: {}%", p.last_5_years * 20)></div></div>
-                                                </div>
-                                                <div class="stat-item">
-                                                    <span class="stat-label">"Last 10 Years"</span>
-                                                    <span class="stat-value">{format!("{} / 10", p.last_10_years)}</span>
-                                                    <div class="progress-bar"><div class="progress" style=format!("width: {}%", p.last_10_years * 10)></div></div>
-                                                </div>
                                                 <div class="stat-item">
                                                     <span class="stat-label">"Total Inclusions"</span>
                                                     <span class="stat-value">{p.total_years}</span>
                                                 </div>
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"First Inclusion"</span>
+                                                    <span class="stat-value">{p.first_year.unwrap_or(0)}</span>
+                                                </div>
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"Latest Inclusion"</span>
+                                                    <span class="stat-value">{p.latest_year.unwrap_or(0)}</span>
+                                                </div>
                                             </div>
-                                            <p class="years-range">"First seen: " {p.first_year.unwrap_or(0)} " | Latest: " {p.latest_year.unwrap_or(0)}</p>
                                             
-                                            <h3>"Full History"</h3>
+                                            <h3>"Guide Inclusion Years"</h3>
                                             <div class="year-grid">
                                                 {years.into_iter()
                                                     .map(|year| view! { <span class="year-tag">{year}</span> })
