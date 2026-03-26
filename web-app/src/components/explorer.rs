@@ -2,7 +2,6 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use crate::server::{get_counties, get_county_details, get_pubs_by_location, get_years, get_year_counties};
-use crate::models::{CountyDetails, PubSummary, YearSummary};
 
 #[component]
 pub fn ExportButtons(

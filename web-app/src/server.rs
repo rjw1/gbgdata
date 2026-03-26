@@ -161,7 +161,7 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
         param_idx += 1;
     }
 
-    if let Some(y) = year {
+    if let Some(_y) = year {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
         // We need a separate way to bind i32, but for now we'll push it as string if we can, 
         // or better, handle the query specifically.
@@ -211,6 +211,35 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
            ORDER BY p.name LIMIT 50"#
     )
     .bind(format!("%{}%", query))
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(pubs)
+}
+
+#[server(GetRankedPubs, "/api")]
+pub async fn get_ranked_pubs() -> Result<Vec<PubSummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let pubs = sqlx::query_as::<_, PubSummary>(
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
+                  NULL::float8 as distance_meters,
+                  s.latest_year,
+                  s.total_years as "total_years_rank"
+           FROM pubs p
+           JOIN pub_stats s ON p.id = s.pub_id
+           ORDER BY s.total_years DESC, p.name ASC
+           LIMIT 100"#
+    )
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;

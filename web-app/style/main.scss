@@ -239,6 +239,56 @@ nav a {
   box-shadow: 0 2px 4px rgba(0,0,0,0.15);
   transition: transform 0.2s, box-shadow 0.2s;
   border-left: 5px solid var(--amber);
+
+  &.ranking-card {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    border-left: 8px solid var(--amber);
+  }
+}
+
+.ranking-number {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: var(--amber);
+  opacity: 0.5;
+  min-width: 80px;
+}
+
+.ranking-content {
+  flex: 1;
+}
+
+.ranking-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  background: var(--off-white);
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-top: 0.5rem;
+
+  .count {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--forest-green);
+  }
+
+  .label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #888;
+    text-transform: uppercase;
+  }
+}
+
+.badge.small {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
 }
 
 .pub-card:hover {

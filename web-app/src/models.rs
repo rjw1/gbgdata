@@ -12,6 +12,7 @@ pub struct PubSummary {
     pub closed: bool,
     pub distance_meters: Option<f64>,
     pub latest_year: Option<i32>,
+    pub total_years_rank: Option<i64>,
 }
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]

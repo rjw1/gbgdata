@@ -2,6 +2,7 @@ use crate::components::pub_list::PubList;
 use crate::components::pub_detail::PubDetail;
 use crate::components::near_me::NearMe;
 use crate::components::explorer::{ExplorerHome, CountyDashboard, LocationPubList, YearDashboard};
+use crate::components::rankings::Rankings;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
@@ -100,12 +101,15 @@ pub fn App() -> impl IntoView {
                         <A href="/explore">"Explore"</A>
                         " | "
                         <A href="/near-me">"Near Me"</A>
+                        " | "
+                        <A href="/rankings">"Rankings"</A>
                     </div>
                     <ThemeToggle />
                 </nav>
                 <Routes fallback=|| view! { "Page not found." }>
                     <Route path=path!("/") view=PubList/>
                     <Route path=path!("/near-me") view=NearMe/>
+                    <Route path=path!("/rankings") view=Rankings/>
                     <Route path=path!("/pub/:id") view=PubDetail/>
                     
                     <Route path=path!("/explore") view=ExplorerHome/>
