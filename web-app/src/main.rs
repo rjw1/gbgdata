@@ -35,6 +35,7 @@ async fn main() {
         .nest_service("/assets", ServeDir::new(&*leptos_options.site_root))
         .route("/export/json", get(export_json))
         .route("/export/csv", get(export_csv))
+        .route("/export/parquet", get(export_parquet))
         .leptos_routes_with_context(
             &leptos_options,
             routes,

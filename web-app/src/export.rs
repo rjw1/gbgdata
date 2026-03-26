@@ -81,7 +81,6 @@ pub async fn export_csv(
     match get_export_data(&state.pool, filter).await {
         Ok(data) => {
             let mut wtr = csv::Writer::from_writer(Vec::new());
-            // Header is automatic from struct if we used Serialize, but let's be explicit or use Serialize
             for p in data {
                 let _ = wtr.serialize(p);
             }
@@ -90,6 +89,73 @@ pub async fn export_csv(
             (
                 [(header::CONTENT_TYPE, "text/csv"), (header::CONTENT_DISPOSITION, "attachment; filename=\"pubs.csv\"")],
                 csv_data
+            ).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+pub async fn export_parquet(
+    State(state): State<AppState>,
+    Query(filter): Query<ExportFilter>,
+) -> impl IntoResponse {
+    use axum::http::header;
+    use arrow::array::{StringArray, BooleanArray, Float64Array, Int32Array};
+    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::record_batch::RecordBatch;
+    use parquet::arrow::arrow_writer::ArrowWriter;
+    use std::sync::Arc;
+
+    match get_export_data(&state.pool, filter).await {
+        Ok(data) => {
+            let schema = Arc::new(Schema::new(vec![
+                Field::new("id", DataType::Utf8, false),
+                Field::new("name", DataType::Utf8, false),
+                Field::new("address", DataType::Utf8, false),
+                Field::new("town", DataType::Utf8, false),
+                Field::new("county", DataType::Utf8, false),
+                Field::new("postcode", DataType::Utf8, false),
+                Field::new("closed", DataType::Boolean, false),
+                Field::new("lat", DataType::Float64, true),
+                Field::new("lon", DataType::Float64, true),
+                Field::new("current_streak", DataType::Int32, false),
+                Field::new("total_years", DataType::Int64, false),
+            ]));
+
+            let id_array = StringArray::from(data.iter().map(|p| p.id.to_string()).collect::<Vec<_>>());
+            let name_array = StringArray::from(data.iter().map(|p| p.name.clone()).collect::<Vec<_>>());
+            let addr_array = StringArray::from(data.iter().map(|p| p.address.clone()).collect::<Vec<_>>());
+            let town_array = StringArray::from(data.iter().map(|p| p.town.clone()).collect::<Vec<_>>());
+            let county_array = StringArray::from(data.iter().map(|p| p.county.clone()).collect::<Vec<_>>());
+            let post_array = StringArray::from(data.iter().map(|p| p.postcode.clone()).collect::<Vec<_>>());
+            let closed_array = BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<_>>());
+            let lat_array = Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<_>>());
+            let lon_array = Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<_>>());
+            let streak_array = Int32Array::from(data.iter().map(|p| p.current_streak).collect::<Vec<_>>());
+            let total_array = arrow::array::Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<_>>());
+
+            let batch = RecordBatch::try_new(schema.clone(), vec![
+                Arc::new(id_array),
+                Arc::new(name_array),
+                Arc::new(addr_array),
+                Arc::new(town_array),
+                Arc::new(county_array),
+                Arc::new(post_array),
+                Arc::new(closed_array),
+                Arc::new(lat_array),
+                Arc::new(lon_array),
+                Arc::new(streak_array),
+                Arc::new(total_array),
+            ]).unwrap();
+
+            let mut buf = Vec::new();
+            let mut writer = ArrowWriter::try_new(&mut buf, schema, None).unwrap();
+            writer.write(&batch).unwrap();
+            writer.close().unwrap();
+
+            (
+                [(header::CONTENT_TYPE, "application/vnd.apache.parquet"), (header::CONTENT_DISPOSITION, "attachment; filename=\"pubs.parquet\"")],
+                buf
             ).into_response()
         }
         Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
