@@ -81,7 +81,9 @@ async fn run_import(pool: &sqlx::PgPool, args: Args) -> Result<()> {
         }
     }
 
-    println!("Import complete!");
+    println!("Import complete! Refreshing statistics view...");
+    db::refresh_pub_stats(pool).await?;
+    println!("Statistics refreshed.");
     Ok(())
 }
 
@@ -122,5 +124,8 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
         }
     }
 
+    println!("Geocoding complete! Refreshing statistics view...");
+    db::refresh_pub_stats(pool).await?;
+    println!("Statistics refreshed.");
     Ok(())
 }

@@ -77,3 +77,10 @@ pub async fn update_pub_location(pool: &PgPool, pub_id: Uuid, lat: f64, lon: f64
     .await?;
     Ok(())
 }
+
+pub async fn refresh_pub_stats(pool: &PgPool) -> Result<()> {
+    sqlx::query!("REFRESH MATERIALIZED VIEW pub_stats")
+        .execute(pool)
+        .await?;
+    Ok(())
+}
