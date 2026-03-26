@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use crate::server::{get_nearby_pubs, geocode_manual};
-use crate::models::PubSummary;
 use leptos_router::components::A;
 
 #[component]
@@ -21,14 +20,14 @@ pub fn NearMe() -> impl IntoView {
         },
     );
 
-    let handle_search = move |_| {
+    let handle_search = move || {
         let query = search_query.get();
         if query.trim().is_empty() { return; }
         
         set_loading.set(true);
         set_error.set(None);
         
-        spawn_local(async move {
+        leptos::task::spawn_local(async move {
             match geocode_manual(query).await {
                 Ok(Some(coords)) => {
                     set_center_coords.set(Some(coords));
@@ -93,16 +92,24 @@ pub fn NearMe() -> impl IntoView {
                         on:input=move |ev| set_search_query.set(event_target_value(&ev))
                         on:keydown=move |ev| {
                             if ev.key() == "Enter" {
-                                handle_search(());
+                                handle_search();
                             }
                         }
                         prop:value=move || search_query.get()
                         class="location-input"
                     />
-                    <button on:click=handle_search class="search-btn" disabled=move || is_loading.get()>
+                    <button 
+                        on:click=move |_| handle_search() 
+                        class="search-btn" 
+                        disabled=move || is_loading.get()
+                    >
                         "Search"
                     </button>
-                    <button on:click=handle_gps class="gps-btn" disabled=move || is_loading.get()>
+                    <button 
+                        on:click=handle_gps 
+                        class="gps-btn" 
+                        disabled=move || is_loading.get()
+                    >
                         "GPS"
                     </button>
                 </div>
