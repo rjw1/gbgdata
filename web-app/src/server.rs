@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary};
+use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails};
 use uuid::Uuid;
 
 #[server(GetCounties, "/api")]

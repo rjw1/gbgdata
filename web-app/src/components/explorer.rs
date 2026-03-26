@@ -5,6 +5,35 @@ use crate::server::{get_counties, get_county_details, get_pubs_by_location};
 use crate::models::{CountyDetails, PubSummary};
 
 #[component]
+pub fn ExportButtons(
+    #[prop(into)] county: Option<String>,
+    #[prop(into)] town: Option<String>,
+    #[prop(into)] outcode: Option<String>,
+) -> impl IntoView {
+    let mut query_params = Vec::new();
+    if let Some(ref c) = county { query_params.push(format!("county={}", c)); }
+    if let Some(ref t) = town { query_params.push(format!("town={}", t)); }
+    if let Some(ref o) = outcode { query_params.push(format!("outcode={}", o)); }
+    
+    let query_string = if query_params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", query_params.join("&"))
+    };
+
+    view! {
+        <div class="export-container">
+            <span class="export-label">"Export: "</span>
+            <div class="export-group">
+                <a href=format!("/export/json{}", query_string) class="export-link" download="pubs.json">"JSON"</a>
+                <a href=format!("/export/csv{}", query_string) class="export-link" download="pubs.csv">"CSV"</a>
+                <a href=format!("/export/parquet{}", query_string) class="export-link" download="pubs.parquet">"Parquet"</a>
+            </div>
+        </div>
+    }
+}
+
+#[component]
 pub fn Breadcrumbs(
     #[prop(into)] county: Option<String>,
     #[prop(into)] town: Option<String>,
@@ -30,7 +59,10 @@ pub fn ExplorerHome() -> impl IntoView {
 
     view! {
         <div class="explorer-container">
-            <Breadcrumbs county=None town=None outcode=None />
+            <div class="explorer-header">
+                <Breadcrumbs county=None town=None outcode=None />
+                <ExportButtons county=None town=None outcode=None />
+            </div>
             <h1>"Browse by County"</h1>
             <Suspense fallback=|| view! { <p>"Loading counties..."</p> }>
                 {move || counties.get().map(|res| match res {
@@ -41,7 +73,7 @@ pub fn ExplorerHome() -> impl IntoView {
                                 view! {
                                     <A href=format!("/explore/{}", name) attr:class="category-card">
                                         <h3>{name}</h3>
-                                        <p>{c.pub_count} " Pubs"</p>
+                                        <p>{c.pub_count}</p>
                                     </A>
                                 }
                             }).collect_view()}
@@ -66,7 +98,10 @@ pub fn CountyDashboard() -> impl IntoView {
 
     view! {
         <div class="explorer-container">
-            <Breadcrumbs county=Some(county()) town=None outcode=None />
+            <div class="explorer-header">
+                <Breadcrumbs county=Some(county()) town=None outcode=None />
+                <ExportButtons county=Some(county()) town=None outcode=None />
+            </div>
             <Suspense fallback=|| view! { <p>"Loading county details..."</p> }>
                 {move || details.get().map(|res: Result<CountyDetails, ServerFnError>| match res {
                     Ok(d) => {
@@ -128,7 +163,10 @@ pub fn LocationPubList() -> impl IntoView {
 
     view! {
         <div class="explorer-container">
-            <Breadcrumbs county=Some(county()) town=town() outcode=outcode() />
+            <div class="explorer-header">
+                <Breadcrumbs county=Some(county()) town=town() outcode=outcode() />
+                <ExportButtons county=Some(county()) town=town() outcode=outcode() />
+            </div>
             <h1>
                 {move || if let Some(t) = town() { format!("Pubs in {}", t) } 
                          else if let Some(o) = outcode() { format!("Pubs in {}", o) }
@@ -144,6 +182,7 @@ pub fn LocationPubList() -> impl IntoView {
                             let town_p = p.town.clone();
                             let county_p = p.county.clone();
                             let closed = p.closed;
+                            let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
@@ -151,7 +190,6 @@ pub fn LocationPubList() -> impl IntoView {
                                     {if closed {
                                         view! { <span class="badge closed">"Closed"</span> }.into_any()
                                     } else {
-                                        let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
                                         view! { <span class="badge open">{year_text}</span> }.into_any()
                                     }}
                                 </A>
