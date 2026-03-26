@@ -17,6 +17,9 @@ CREATE TABLE pubs (
     last_seen DATE DEFAULT CURRENT_DATE
 );
 
+CREATE INDEX idx_pubs_location ON pubs USING GIST (location);
+CREATE INDEX idx_pubs_name ON pubs (name);
+
 CREATE TABLE gbg_history (
     id SERIAL PRIMARY KEY,
     pub_id UUID REFERENCES pubs(id) ON DELETE CASCADE,
