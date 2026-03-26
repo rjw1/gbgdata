@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use crate::server::get_nearby_pubs;
-use crate::models::PubSummary;
 use leptos_router::components::A;
 
 #[component]
@@ -19,22 +18,29 @@ pub fn NearMe() -> impl IntoView {
     );
 
     let get_location = move |_| {
+        use leptos::wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+        
         let window = web_sys::window().expect("no global `window` exists");
         let navigator = window.navigator();
         let geolocation = navigator.geolocation().expect("geolocation not available");
 
-        let success_callback = move |pos: web_sys::GeolocationPosition| {
-            let coords = pos.coords();
-            set_coords.set(Some((coords.latitude(), coords.longitude())));
+        let success_callback = move |pos: JsValue| {
+            let pos_obj = js_sys::Object::from(pos);
+            let coords_obj = js_sys::Reflect::get(&pos_obj, &JsValue::from_str("coords")).unwrap();
+            let lat = js_sys::Reflect::get(&coords_obj, &JsValue::from_str("latitude")).unwrap().as_f64().unwrap();
+            let lon = js_sys::Reflect::get(&coords_obj, &JsValue::from_str("longitude")).unwrap().as_f64().unwrap();
+            
+            set_coords.set(Some((lat, lon)));
             set_error.set(None);
         };
 
-        let error_callback = move |err: web_sys::GeolocationPositionError| {
-            set_error.set(Some(err.message()));
+        let error_callback = move |err: JsValue| {
+            let message = js_sys::Reflect::get(&err, &JsValue::from_str("message")).unwrap().as_string().unwrap_or_default();
+            set_error.set(Some(message));
         };
 
-        let success_closure = wasm_bindgen::prelude::Closure::wrap(Box::new(success_callback) as Box<dyn FnMut(web_sys::GeolocationPosition)>);
-        let error_closure = wasm_bindgen::prelude::Closure::wrap(Box::new(error_callback) as Box<dyn FnMut(web_sys::GeolocationPositionError)>);
+        let success_closure = Closure::wrap(Box::new(success_callback) as Box<dyn FnMut(JsValue)>);
+        let error_closure = Closure::wrap(Box::new(error_callback) as Box<dyn FnMut(JsValue)>);
 
         let _ = geolocation.get_current_position_with_error_callback(
             success_closure.as_ref().unchecked_ref(),
@@ -66,10 +72,14 @@ pub fn NearMe() -> impl IntoView {
                                         data.into_iter()
                                             .map(|p| {
                                                 let dist = p.distance_meters.map(|d| format!("{:.1}km away", d / 1000.0)).unwrap_or_default();
+                                                let id = p.id;
+                                                let name = p.name.clone();
+                                                let town = p.town.clone();
+                                                let county = p.county.clone();
                                                 view! {
-                                                    <A href=format!("/pub/{}", p.id) attr:class="pub-card">
-                                                        <h3>{p.name}</h3>
-                                                        <p>{format!("{}, {}", p.town, p.county)}</p>
+                                                    <A href=format!("/pub/{}", id) attr:class="pub-card">
+                                                        <h3>{name}</h3>
+                                                        <p>{format!("{}, {}", town, county)}</p>
                                                         <span class="distance-tag">{dist}</span>
                                                     </A>
                                                 }
