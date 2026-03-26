@@ -73,7 +73,9 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
                   COALESCE(county, '') as "county!", 
                   COALESCE(postcode, '') as "postcode!", 
                   COALESCE(closed, false) as "closed!",
-                  untappd_id, google_maps_id, whatpub_id, rgl_id
+                  untappd_id, google_maps_id, whatpub_id, rgl_id,
+                  ST_Y(location::geometry) as lat,
+                  ST_X(location::geometry) as lon
            FROM pubs WHERE id = $1"#,
         id
     )
@@ -101,6 +103,8 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         google_maps_id: pub_info.google_maps_id,
         whatpub_id: pub_info.whatpub_id,
         rgl_id: pub_info.rgl_id,
+        lat: pub_info.lat,
+        lon: pub_info.lon,
         years,
     })
 }

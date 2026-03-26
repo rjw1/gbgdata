@@ -25,5 +25,7 @@ pub struct PubDetail {
     pub google_maps_id: Option<String>,
     pub whatpub_id: Option<String>,
     pub rgl_id: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
     pub years: Vec<i32>,
 }

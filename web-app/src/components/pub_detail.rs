@@ -58,6 +58,25 @@ pub fn PubDetail() -> impl IntoView {
                                             }}
                                         </div>
 
+                                        {if let (Some(lat), Some(lon)) = (p.lat, p.lon) {
+                                            let map_url = format!("https://www.openstreetmap.org/export/embed.html?bbox={},{},{},{}&layer=mapnik&marker={},{}", lon - 0.005, lat - 0.005, lon + 0.005, lat + 0.005, lat, lon);
+                                            view! {
+                                                <div class="map-container">
+                                                    <iframe 
+                                                        width="100%" 
+                                                        height="300" 
+                                                        frameborder="0" 
+                                                        scrolling="no" 
+                                                        marginheight="0" 
+                                                        marginwidth="0" 
+                                                        src=map_url
+                                                    ></iframe>
+                                                </div>
+                                            }.into_any()
+                                        } else {
+                                            view! { <div class="no-map">"Coordinates not available"</div> }.into_any()
+                                        }}
+
                                         <div class="stats-card">
                                             <h2>"GBG History"</h2>
                                             <p>"Years in Guide: " {years.len()}</p>
