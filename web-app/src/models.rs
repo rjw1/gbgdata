@@ -35,3 +35,28 @@ pub struct PubDetail {
     pub latest_year: Option<i32>,
     pub years: Vec<i32>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CountySummary {
+    pub name: String,
+    pub pub_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TownSummary {
+    pub name: String,
+    pub pub_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutcodeSummary {
+    pub name: String,
+    pub pub_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CountyDetails {
+    pub name: String,
+    pub towns: Vec<TownSummary>,
+    pub outcodes: Vec<OutcodeSummary>,
+}

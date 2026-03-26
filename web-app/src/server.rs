@@ -1,6 +1,131 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail};
+use crate::models::{PubSummary, PubDetail, CountySummary, TownSummary, OutcodeSummary, CountyDetails};
 use uuid::Uuid;
+
+#[server(GetCounties, "/api")]
+pub async fn get_counties() -> Result<Vec<CountySummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let counties = sqlx::query_as!(
+        CountySummary,
+        r#"SELECT county as "name!", COUNT(*) as "pub_count!"
+           FROM pubs 
+           WHERE county IS NOT NULL AND county != ''
+           GROUP BY county 
+           ORDER BY county"#
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(counties)
+}
+
+#[server(GetCountyDetails, "/api")]
+pub async fn get_county_details(county: String) -> Result<CountyDetails, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let towns = sqlx::query_as!(
+        TownSummary,
+        r#"SELECT town as "name!", COUNT(*) as "pub_count!"
+           FROM pubs 
+           WHERE county = $1 AND town IS NOT NULL AND town != ''
+           GROUP BY town 
+           ORDER BY town"#,
+        county
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let outcodes = sqlx::query_as!(
+        OutcodeSummary,
+        r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name!", COUNT(*) as "pub_count!"
+           FROM pubs 
+           WHERE county = $1 AND postcode IS NOT NULL AND postcode != ''
+           GROUP BY 1
+           ORDER BY 1"#,
+        county
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(CountyDetails {
+        name: county,
+        towns,
+        outcodes,
+    })
+}
+
+#[server(GetPubsByLocation, "/api")]
+pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>) -> Result<Vec<PubSummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let pubs = if let Some(t) = town {
+        sqlx::query_as!(
+            PubSummary,
+            r#"SELECT id, name, 
+                      COALESCE(town, '') as "town!", 
+                      COALESCE(county, '') as "county!", 
+                      COALESCE(postcode, '') as "postcode!", 
+                      COALESCE(closed, false) as "closed!",
+                      NULL::float8 as distance_meters
+               FROM pubs 
+               WHERE county = $1 AND town = $2
+               ORDER BY name"#,
+            county, t
+        )
+        .fetch_all(&pool)
+        .await
+    } else if let Some(o) = outcode {
+        sqlx::query_as!(
+            PubSummary,
+            r#"SELECT id, name, 
+                      COALESCE(town, '') as "town!", 
+                      COALESCE(county, '') as "county!", 
+                      COALESCE(postcode, '') as "postcode!", 
+                      COALESCE(closed, false) as "closed!",
+                      NULL::float8 as distance_meters
+               FROM pubs 
+               WHERE county = $1 AND SPLIT_PART(postcode, ' ', 1) = $2
+               ORDER BY name"#,
+            county, o
+        )
+        .fetch_all(&pool)
+        .await
+    } else {
+        sqlx::query_as!(
+            PubSummary,
+            r#"SELECT id, name, 
+                      COALESCE(town, '') as "town!", 
+                      COALESCE(county, '') as "county!", 
+                      COALESCE(postcode, '') as "postcode!", 
+                      COALESCE(closed, false) as "closed!",
+                      NULL::float8 as distance_meters
+               FROM pubs 
+               WHERE county = $1
+               ORDER BY name"#,
+            county
+        )
+        .fetch_all(&pool)
+        .await
+    };
+
+    pubs.map_err(|e| ServerFnError::new(e.to_string()))
+}
 
 #[server(GetPubs, "/api")]
 pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
