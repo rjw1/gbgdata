@@ -40,3 +40,16 @@ pub async fn insert_pub(pool: &PgPool, raw_pub: &RawPub) -> Result<()> {
     tx.commit().await?;
     Ok(())
 }
+
+pub async fn update_pub_location(pool: &sqlx::PgPool, id: uuid::Uuid, lat: f64, lon: f64) -> Result<()> {
+    sqlx::query(
+        "UPDATE pubs SET location = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography 
+         WHERE id = $3"
+    )
+    .bind(lon)
+    .bind(lat)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
