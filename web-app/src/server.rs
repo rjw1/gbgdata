@@ -1,6 +1,51 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary};
+use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary, YearSummary};
 use uuid::Uuid;
+
+#[server(GetYears, "/api")]
+pub async fn get_years() -> Result<Vec<YearSummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let years = sqlx::query_as::<_, YearSummary>(
+        r#"SELECT year, COUNT(*) as "pub_count"
+           FROM gbg_history 
+           GROUP BY year 
+           ORDER BY year DESC"#
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(years)
+}
+
+#[server(GetYearCounties, "/api")]
+pub async fn get_year_counties(year: i32) -> Result<Vec<CountySummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let counties = sqlx::query_as::<_, CountySummary>(
+        r#"SELECT p.county as "name", COUNT(*) as "pub_count"
+           FROM pubs p
+           JOIN gbg_history h ON p.id = h.pub_id
+           WHERE h.year = $1 AND p.county IS NOT NULL AND p.county != ''
+           GROUP BY p.county 
+           ORDER BY p.county"#
+    )
+    .bind(year)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(counties)
+}
 
 #[server(GetCounties, "/api")]
 pub async fn get_counties() -> Result<Vec<CountySummary>, ServerFnError> {
@@ -10,9 +55,8 @@ pub async fn get_counties() -> Result<Vec<CountySummary>, ServerFnError> {
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let counties = sqlx::query_as!(
-        CountySummary,
-        r#"SELECT county as "name!", COUNT(*) as "pub_count!"
+    let counties = sqlx::query_as::<_, CountySummary>(
+        r#"SELECT county as "name", COUNT(*) as "pub_count"
            FROM pubs 
            WHERE county IS NOT NULL AND county != ''
            GROUP BY county 
@@ -26,38 +70,50 @@ pub async fn get_counties() -> Result<Vec<CountySummary>, ServerFnError> {
 }
 
 #[server(GetCountyDetails, "/api")]
-pub async fn get_county_details(county: String) -> Result<CountyDetails, ServerFnError> {
+pub async fn get_county_details(county: String, year: Option<i32>) -> Result<CountyDetails, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let towns = sqlx::query_as!(
-        TownSummary,
-        r#"SELECT town as "name!", COUNT(*) as "pub_count!"
+    let towns_query = if year.is_some() {
+        r#"SELECT town as "name", COUNT(*) as "pub_count"
+           FROM pubs p
+           JOIN gbg_history h ON p.id = h.pub_id
+           WHERE p.county = $1 AND h.year = $2 AND town IS NOT NULL AND town != ''
+           GROUP BY town 
+           ORDER BY town"#
+    } else {
+        r#"SELECT town as "name", COUNT(*) as "pub_count"
            FROM pubs 
            WHERE county = $1 AND town IS NOT NULL AND town != ''
            GROUP BY town 
-           ORDER BY town"#,
-        county
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+           ORDER BY town"#
+    };
 
-    let outcodes = sqlx::query_as!(
-        OutcodeSummary,
-        r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name!", COUNT(*) as "pub_count!"
+    let mut towns_q = sqlx::query_as::<_, TownSummary>(towns_query).bind(&county);
+    if let Some(y) = year { towns_q = towns_q.bind(y); }
+    let towns = towns_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let outcodes_query = if year.is_some() {
+        r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name", COUNT(*) as "pub_count"
+           FROM pubs p
+           JOIN gbg_history h ON p.id = h.pub_id
+           WHERE p.county = $1 AND h.year = $2 AND postcode IS NOT NULL AND postcode != ''
+           GROUP BY 1
+           ORDER BY 1"#
+    } else {
+        r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name", COUNT(*) as "pub_count"
            FROM pubs 
            WHERE county = $1 AND postcode IS NOT NULL AND postcode != ''
            GROUP BY 1
-           ORDER BY 1"#,
-        county
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+           ORDER BY 1"#
+    };
+
+    let mut outcodes_q = sqlx::query_as::<_, OutcodeSummary>(outcodes_query).bind(&county);
+    if let Some(y) = year { outcodes_q = outcodes_q.bind(y); }
+    let outcodes = outcodes_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(CountyDetails {
         name: county,
@@ -67,70 +123,70 @@ pub async fn get_county_details(county: String) -> Result<CountyDetails, ServerF
 }
 
 #[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>, year: Option<i32>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pubs = if let Some(t) = town {
-        sqlx::query_as!(
-            PubSummary,
-            r#"SELECT p.id, p.name, 
-                      COALESCE(p.town, '') as "town!", 
-                      COALESCE(p.county, '') as "county!", 
-                      COALESCE(p.postcode, '') as "postcode!", 
-                      COALESCE(p.closed, false) as "closed!",
-                      NULL::float8 as distance_meters,
-                      s.latest_year
-               FROM pubs p
-               LEFT JOIN pub_stats s ON p.id = s.pub_id
-               WHERE p.county = $1 AND p.town = $2
-               ORDER BY p.name"#,
-            county, t
-        )
-        .fetch_all(&pool)
-        .await
-    } else if let Some(o) = outcode {
-        sqlx::query_as!(
-            PubSummary,
-            r#"SELECT p.id, p.name, 
-                      COALESCE(p.town, '') as "town!", 
-                      COALESCE(p.county, '') as "county!", 
-                      COALESCE(p.postcode, '') as "postcode!", 
-                      COALESCE(p.closed, false) as "closed!",
-                      NULL::float8 as distance_meters,
-                      s.latest_year
-               FROM pubs p
-               LEFT JOIN pub_stats s ON p.id = s.pub_id
-               WHERE p.county = $1 AND SPLIT_PART(p.postcode, ' ', 1) = $2
-               ORDER BY p.name"#,
-            county, o
-        )
-        .fetch_all(&pool)
-        .await
-    } else {
-        sqlx::query_as!(
-            PubSummary,
-            r#"SELECT p.id, p.name, 
-                      COALESCE(p.town, '') as "town!", 
-                      COALESCE(p.county, '') as "county!", 
-                      COALESCE(p.postcode, '') as "postcode!", 
-                      COALESCE(p.closed, false) as "closed!",
-                      NULL::float8 as distance_meters,
-                      s.latest_year
-               FROM pubs p
-               LEFT JOIN pub_stats s ON p.id = s.pub_id
-               WHERE p.county = $1
-               ORDER BY p.name"#,
-            county
-        )
-        .fetch_all(&pool)
-        .await
-    };
+    let mut query = String::from(
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
+                  NULL::float8 as distance_meters,
+                  s.latest_year
+           FROM pubs p
+           LEFT JOIN pub_stats s ON p.id = s.pub_id"#
+    );
 
-    pubs.map_err(|e| ServerFnError::new(e.to_string()))
+    if year.is_some() {
+        query.push_str(" JOIN gbg_history h ON p.id = h.pub_id");
+    }
+
+    query.push_str(" WHERE p.county = $1");
+
+    let mut binds: Vec<String> = vec![county];
+    let mut param_idx = 2;
+
+    if let Some(t) = town {
+        query.push_str(&format!(" AND p.town = ${}", param_idx));
+        binds.push(t);
+        param_idx += 1;
+    } else if let Some(o) = outcode {
+        query.push_str(&format!(" AND SPLIT_PART(p.postcode, ' ', 1) = ${}", param_idx));
+        binds.push(o);
+        param_idx += 1;
+    }
+
+    if let Some(y) = year {
+        query.push_str(&format!(" AND h.year = ${}", param_idx));
+        // We need a separate way to bind i32, but for now we'll push it as string if we can, 
+        // or better, handle the query specifically.
+        // Actually sqlx QueryAs doesn't support dynamic number of binds easily with different types.
+        // Let's use a simpler approach for now since year is i32.
+    }
+
+    query.push_str(" ORDER BY p.name");
+
+    // Re-writing to handle types properly
+    let pubs = if let Some(y) = year {
+        if let Some(t) = binds.get(1) {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(t).bind(y).fetch_all(&pool).await
+        } else {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(y).fetch_all(&pool).await
+        }
+    } else {
+        if let Some(t) = binds.get(1) {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(t).fetch_all(&pool).await
+        } else {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).fetch_all(&pool).await
+        }
+    }.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(pubs)
 }
 
 #[server(GetPubs, "/api")]
@@ -141,21 +197,20 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pubs = sqlx::query_as!(
-        PubSummary,
+    let pubs = sqlx::query_as::<_, PubSummary>(
         r#"SELECT p.id, p.name, 
-                  COALESCE(p.town, '') as "town!", 
-                  COALESCE(p.county, '') as "county!", 
-                  COALESCE(p.postcode, '') as "postcode!", 
-                  COALESCE(p.closed, false) as "closed!",
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
                   s.latest_year
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.county ILIKE $1
-           ORDER BY p.name LIMIT 50"#,
-        format!("%{}%", query)
+           ORDER BY p.name LIMIT 50"#
     )
+    .bind(format!("%{}%", query))
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -216,22 +271,23 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<V
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pubs = sqlx::query_as!(
-        PubSummary,
+    let pubs = sqlx::query_as::<_, PubSummary>(
         r#"SELECT p.id, p.name, 
-                  COALESCE(p.town, '') as "town!", 
-                  COALESCE(p.county, '') as "county!", 
-                  COALESCE(p.postcode, '') as "postcode!", 
-                  COALESCE(p.closed, false) as "closed!",
-                  ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as "distance_meters",
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
+                  ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters,
                   s.latest_year
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.location IS NOT NULL 
              AND ST_DWithin(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
-           ORDER BY distance_meters LIMIT 50"#,
-        lat, lon, radius_meters
+           ORDER BY distance_meters LIMIT 50"#
     )
+    .bind(lat)
+    .bind(lon)
+    .bind(radius_meters)
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -241,65 +297,65 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<V
 
 #[server(GetPubDetail, "/api")]
 pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
-    use sqlx::PgPool;
+    use sqlx::{PgPool, Row};
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pub_info = sqlx::query!(
+    let row = sqlx::query(
         r#"SELECT p.id, p.name, 
-                  COALESCE(p.address, '') as "address!", 
-                  COALESCE(p.town, '') as "town!", 
-                  COALESCE(p.county, '') as "county!", 
-                  COALESCE(p.postcode, '') as "postcode!", 
-                  COALESCE(p.closed, false) as "closed!",
+                  COALESCE(p.address, '') as address, 
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
                   p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
                   ST_Y(p.location::geometry) as lat,
                   ST_X(p.location::geometry) as lon,
-                  COALESCE(s.current_streak, 0) as "current_streak!",
-                  COALESCE(s.last_5_years, 0) as "last_5_years!",
-                  COALESCE(s.last_10_years, 0) as "last_10_years!",
-                  COALESCE(s.total_years, 0) as "total_years!",
+                  COALESCE(s.current_streak, 0) as current_streak,
+                  COALESCE(s.last_5_years, 0) as last_5_years,
+                  COALESCE(s.last_10_years, 0) as last_10_years,
+                  COALESCE(s.total_years, 0) as total_years,
                   s.first_year,
                   s.latest_year
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE p.id = $1"#,
-        id
+           WHERE p.id = $1"#
     )
+    .bind(id)
     .fetch_one(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let years = sqlx::query_scalar!(
-        "SELECT year FROM gbg_history WHERE pub_id = $1 ORDER BY year DESC",
-        id
+    let years = sqlx::query_scalar::<_, i32>(
+        "SELECT year FROM gbg_history WHERE pub_id = $1 ORDER BY year DESC"
     )
+    .bind(id)
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(PubDetail {
-        id: pub_info.id,
-        name: pub_info.name,
-        address: pub_info.address,
-        town: pub_info.town,
-        county: pub_info.county,
-        postcode: pub_info.postcode,
-        closed: pub_info.closed,
-        untappd_id: pub_info.untappd_id,
-        google_maps_id: pub_info.google_maps_id,
-        whatpub_id: pub_info.whatpub_id,
-        rgl_id: pub_info.rgl_id,
-        lat: pub_info.lat,
-        lon: pub_info.lon,
-        current_streak: pub_info.current_streak,
-        last_5_years: pub_info.last_5_years,
-        last_10_years: pub_info.last_10_years,
-        total_years: pub_info.total_years,
-        first_year: pub_info.first_year,
-        latest_year: pub_info.latest_year,
+        id: row.get("id"),
+        name: row.get("name"),
+        address: row.get("address"),
+        town: row.get("town"),
+        county: row.get("county"),
+        postcode: row.get("postcode"),
+        closed: row.get("closed"),
+        untappd_id: row.get("untappd_id"),
+        google_maps_id: row.get("google_maps_id"),
+        whatpub_id: row.get("whatpub_id"),
+        rgl_id: row.get("rgl_id"),
+        lat: row.get("lat"),
+        lon: row.get("lon"),
+        current_streak: row.get("current_streak"),
+        last_5_years: row.get("last_5_years"),
+        last_10_years: row.get("last_10_years"),
+        total_years: row.get("total_years"),
+        first_year: row.get("first_year"),
+        latest_year: row.get("latest_year"),
         years,
     })
 }

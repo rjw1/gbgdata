@@ -60,6 +60,13 @@ pub struct OutcodeSummary {
     pub pub_count: i64,
 }
 
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct YearSummary {
+    pub year: i32,
+    pub pub_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CountyDetails {
     pub name: String,

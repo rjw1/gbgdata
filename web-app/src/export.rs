@@ -10,7 +10,6 @@ pub mod ssr_export {
     use sqlx::{PgPool, Row};
     use crate::models::PubDetail;
     use anyhow::Result;
-    use uuid::Uuid;
 
     #[derive(Clone)]
     pub struct AppState {
@@ -29,9 +28,21 @@ pub mod ssr_export {
         pub county: Option<String>,
         pub town: Option<String>,
         pub outcode: Option<String>,
+        pub year: Option<i32>,
     }
 
-    pub async fn get_export_data(pool: &PgPool, filter: ExportFilter) -> Result<Vec<PubDetail>> {
+    impl ExportFilter {
+        pub fn get_filename(&self, ext: &str) -> String {
+            let mut parts = vec!["gbg-pubs".to_string()];
+            if let Some(y) = self.year { parts.push(y.to_string()); }
+            if let Some(ref c) = self.county { parts.push(c.replace(" ", "_")); }
+            if let Some(ref t) = self.town { parts.push(t.replace(" ", "_")); }
+            if let Some(ref o) = self.outcode { parts.push(o.replace(" ", "_")); }
+            format!("{}.{}", parts.join("-"), ext)
+        }
+    }
+
+    pub async fn get_export_data(pool: &PgPool, filter: &ExportFilter) -> Result<Vec<PubDetail>> {
         let mut query = String::from(
             r#"SELECT p.id, p.name, 
                       COALESCE(p.address, '') as address, 
@@ -50,9 +61,14 @@ pub mod ssr_export {
                       s.latest_year,
                       COALESCE((SELECT ARRAY_AGG(year ORDER BY year DESC) FROM gbg_history WHERE pub_id = p.id), ARRAY[]::integer[]) as years
                FROM pubs p
-               LEFT JOIN pub_stats s ON p.id = s.pub_id
-               WHERE 1=1"#
+               LEFT JOIN pub_stats s ON p.id = s.pub_id"#
         );
+
+        if filter.year.is_some() {
+            query.push_str(" JOIN gbg_history h ON p.id = h.pub_id");
+        }
+
+        query.push_str(" WHERE 1=1");
 
         if let Some(ref c) = filter.county {
             query.push_str(&format!(" AND p.county = '{}'", c.replace("'", "''")));
@@ -62,6 +78,9 @@ pub mod ssr_export {
         }
         if let Some(ref o) = filter.outcode {
             query.push_str(&format!(" AND SPLIT_PART(p.postcode, ' ', 1) = '{}'", o.replace("'", "''")));
+        }
+        if let Some(y) = filter.year {
+            query.push_str(&format!(" AND h.year = {}", y));
         }
 
         query.push_str(" ORDER BY p.name");
@@ -102,8 +121,15 @@ pub mod ssr_export {
         State(state): State<AppState>,
         Query(filter): Query<ExportFilter>,
     ) -> impl IntoResponse {
-        match get_export_data(&state.pool, filter).await {
-            Ok(data) => Json(data).into_response(),
+        use axum::http::header;
+        match get_export_data(&state.pool, &filter).await {
+            Ok(data) => (
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (header::CONTENT_DISPOSITION, &format!("attachment; filename=\"{}\"", filter.get_filename("json")))
+                ],
+                Json(data)
+            ).into_response(),
             Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
         }
     }
@@ -114,12 +140,12 @@ pub mod ssr_export {
     ) -> impl IntoResponse {
         use axum::http::header;
         
-        match get_export_data(&state.pool, filter).await {
+        match get_export_data(&state.pool, &filter).await {
             Ok(data) => {
                 let mut wtr = csv::WriterBuilder::new()
-                    .has_headers(false) // We'll write it manually
+                    .has_headers(false)
                     .from_writer(Vec::new());
-
+                
                 let _ = wtr.write_record(&[
                     "id", "name", "address", "town", "county", "postcode", "closed",
                     "untappd_id", "google_maps_id", "whatpub_id", "rgl_id",
@@ -128,7 +154,6 @@ pub mod ssr_export {
                 ]);
 
                 for p in data {
-
                     let years_str = p.years.iter().map(|y| y.to_string()).collect::<Vec<_>>().join(";");
                     let _ = wtr.write_record(&[
                         p.id.to_string(),
@@ -156,7 +181,10 @@ pub mod ssr_export {
                 let csv_data = wtr.into_inner().unwrap_or_default();
                 
                 (
-                    [(header::CONTENT_TYPE, "text/csv"), (header::CONTENT_DISPOSITION, "attachment; filename=\"pubs.csv\"")],
+                    [
+                        (header::CONTENT_TYPE, "text/csv"),
+                        (header::CONTENT_DISPOSITION, &format!("attachment; filename=\"{}\"", filter.get_filename("csv")))
+                    ],
                     csv_data
                 ).into_response()
             }
@@ -175,7 +203,7 @@ pub mod ssr_export {
         use parquet::arrow::arrow_writer::ArrowWriter;
         use std::sync::Arc;
 
-        match get_export_data(&state.pool, filter).await {
+        match get_export_data(&state.pool, &filter).await {
             Ok(data) => {
                 let schema = Arc::new(Schema::new(vec![
                     Field::new("id", DataType::Utf8, false),
@@ -223,7 +251,10 @@ pub mod ssr_export {
                 writer.close().unwrap();
 
                 (
-                    [(header::CONTENT_TYPE, "application/vnd.apache.parquet"), (header::CONTENT_DISPOSITION, "attachment; filename=\"pubs.parquet\"")],
+                    [
+                        (header::CONTENT_TYPE, "application/vnd.apache.parquet"),
+                        (header::CONTENT_DISPOSITION, &format!("attachment; filename=\"{}\"", filter.get_filename("parquet")))
+                    ],
                     buf
                 ).into_response()
             }

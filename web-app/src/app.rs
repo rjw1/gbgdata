@@ -1,7 +1,7 @@
 use crate::components::pub_list::PubList;
 use crate::components::pub_detail::PubDetail;
 use crate::components::near_me::NearMe;
-use crate::components::explorer::{ExplorerHome, CountyDashboard, LocationPubList};
+use crate::components::explorer::{ExplorerHome, CountyDashboard, LocationPubList, YearDashboard};
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
@@ -75,7 +75,6 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <script>
                     "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/assets/sw.js'); }); }"
                 </script>
-                // Blocking script to prevent theme flash
                 <script>
                     "try { let t = localStorage.getItem('theme'); if (t && t !== 'system') document.documentElement.setAttribute('data-theme', t); } catch (e) {}"
                 </script>
@@ -113,6 +112,11 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/explore/:county") view=CountyDashboard/>
                     <Route path=path!("/explore/:county/town/:town") view=LocationPubList/>
                     <Route path=path!("/explore/:county/outcode/:outcode") view=LocationPubList/>
+
+                    <Route path=path!("/explore/year/:year") view=YearDashboard/>
+                    <Route path=path!("/explore/year/:year/:county") view=CountyDashboard/>
+                    <Route path=path!("/explore/year/:year/:county/town/:town") view=LocationPubList/>
+                    <Route path=path!("/explore/year/:year/:county/outcode/:outcode") view=LocationPubList/>
                 </Routes>
             </main>
         </Router>
