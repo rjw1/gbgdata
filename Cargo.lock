@@ -3874,6 +3874,7 @@ dependencies = [
  "leptos_axum",
  "leptos_meta",
  "leptos_router",
+ "reqwest",
  "serde",
  "sqlx",
  "tokio",

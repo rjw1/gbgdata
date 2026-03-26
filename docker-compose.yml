@@ -19,6 +19,7 @@ services:
       dockerfile: web-app/Dockerfile
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/gbgdata
+      - NOMINATIM_URL=http://nominatim:8080/search
       - LEPTOS_SITE_ADDR=0.0.0.0:3000
       - LEPTOS_SITE_ROOT=site
     ports:
