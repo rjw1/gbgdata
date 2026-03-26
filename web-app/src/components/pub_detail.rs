@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use crate::server::get_pub_detail;
+use crate::models::PubDetail;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -8,18 +9,13 @@ pub fn PubDetail() -> impl IntoView {
     let params = use_params_map();
     let id = move || {
         let params_val = params.get();
-        let id_str = params_val.get("id");
-        leptos::logging::log!
-("PubDetail ID update: {:?}", id_str);
-        let id_str = id_str?.clone();
+        let id_str = params_val.get("id")?.clone();
         Uuid::parse_str(&id_str).ok()
     };
 
     let pub_data = Resource::new(
         move || id(),
         move |id| async move {
-            leptos::logging::log!
-("Fetching pub detail for {:?}", id);
             match id {
                 Some(uuid) => get_pub_detail(uuid).await,
                 None => Err(ServerFnError::new("Invalid Pub ID")),
@@ -65,10 +61,7 @@ pub fn PubDetail() -> impl IntoView {
                                                     <iframe 
                                                         width="100%" 
                                                         height="300" 
-                                                        frameborder="0" 
-                                                        scrolling="no" 
-                                                        marginheight="0" 
-                                                        marginwidth="0" 
+                                                        style="border:0" 
                                                         src=map_url
                                                     ></iframe>
                                                 </div>

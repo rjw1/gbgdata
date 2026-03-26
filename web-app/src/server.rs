@@ -16,7 +16,8 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
                   COALESCE(town, '') as "town!", 
                   COALESCE(county, '') as "county!", 
                   COALESCE(postcode, '') as "postcode!", 
-                  COALESCE(closed, false) as "closed!"
+                  COALESCE(closed, false) as "closed!",
+                  NULL::float8 as distance_meters
            FROM pubs 
            WHERE name ILIKE $1 OR town ILIKE $1 OR county ILIKE $1
            ORDER BY name LIMIT 50"#,
