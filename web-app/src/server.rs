@@ -163,6 +163,51 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
     Ok(pubs)
 }
 
+#[server(GeocodeManual, "/api")]
+pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerFnError> {
+    // 1. Try to parse as lat, lon coordinates
+    let coords: Vec<&str> = query.split(',').map(|s| s.trim()).collect();
+    if coords.len() == 2 {
+        if let (Ok(lat), Ok(lon)) = (coords[0].parse::<f64>(), coords[1].parse::<f64>()) {
+            return Ok(Some((lat, lon)));
+        }
+    }
+
+    // 2. Fallback to local Nominatim
+    let nominatim_url = std::env::var("NOMINATIM_URL").unwrap_or_else(|_| "http://nominatim:8080/search".to_string());
+    let client = reqwest::Client::builder()
+        .user_agent("gbgdata-web (bob@example.com)")
+        .build()
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let resp = client.get(nominatim_url)
+        .query(&[
+            ("q", query),
+            ("format", "json".to_string()),
+            ("limit", "1".to_string()),
+        ])
+        .send()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    #[derive(serde::Deserialize)]
+    struct NominatimResponse {
+        lat: String,
+        lon: String,
+    }
+
+    let results: Vec<NominatimResponse> = resp.json().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if let Some(res) = results.first() {
+        let lat = res.lat.parse::<f64>().map_err(|e| ServerFnError::new(e.to_string()))?;
+        let lon = res.lon.parse::<f64>().map_err(|e| ServerFnError::new(e.to_string()))?;
+        Ok(Some((lat, lon)))
+    } else {
+        Ok(None)
+    }
+}
+
 #[server(GetNearbyPubs, "/api")]
 pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
