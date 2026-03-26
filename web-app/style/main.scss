@@ -118,3 +118,52 @@ nav a {
   color: var(--forest-green);
   font-weight: bold;
 }
+
+.stats-dashboard {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin: 2rem 0;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+  }
+}
+
+.hero-streak {
+  text-align: center;
+  
+  .streak-number {
+    display: block;
+    font-size: 4rem;
+    font-weight: 900;
+    color: var(--amber);
+    line-height: 1;
+  }
+  
+  .streak-label {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--forest-green);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+}
+
+.stat-ring-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+
+  .stat-label {
+    font-weight: bold;
+    color: #6c757d;
+  }
+}
