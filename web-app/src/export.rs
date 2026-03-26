@@ -7,9 +7,10 @@ pub mod ssr_export {
     };
     use leptos::prelude::LeptosOptions;
     use serde::Deserialize;
-    use sqlx::PgPool;
+    use sqlx::{PgPool, Row};
     use crate::models::PubDetail;
     use anyhow::Result;
+    use uuid::Uuid;
 
     #[derive(Clone)]
     pub struct AppState {
@@ -33,20 +34,21 @@ pub mod ssr_export {
     pub async fn get_export_data(pool: &PgPool, filter: ExportFilter) -> Result<Vec<PubDetail>> {
         let mut query = String::from(
             r#"SELECT p.id, p.name, 
-                      COALESCE(p.address, '') as "address", 
-                      COALESCE(p.town, '') as "town", 
-                      COALESCE(p.county, '') as "county", 
-                      COALESCE(p.postcode, '') as "postcode", 
-                      COALESCE(p.closed, false) as "closed",
+                      COALESCE(p.address, '') as address, 
+                      COALESCE(p.town, '') as town, 
+                      COALESCE(p.county, '') as county, 
+                      COALESCE(p.postcode, '') as postcode, 
+                      COALESCE(p.closed, false) as closed,
                       p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
                       ST_Y(p.location::geometry) as lat,
                       ST_X(p.location::geometry) as lon,
-                      COALESCE(s.current_streak, 0) as "current_streak",
-                      COALESCE(s.last_5_years, 0) as "last_5_years",
-                      COALESCE(s.last_10_years, 0) as "last_10_years",
-                      COALESCE(s.total_years, 0) as "total_years",
+                      COALESCE(s.current_streak, 0) as current_streak,
+                      COALESCE(s.last_5_years, 0) as last_5_years,
+                      COALESCE(s.last_10_years, 0) as last_10_years,
+                      COALESCE(s.total_years, 0) as total_years,
                       s.first_year,
-                      s.latest_year
+                      s.latest_year,
+                      COALESCE((SELECT ARRAY_AGG(year ORDER BY year DESC) FROM gbg_history WHERE pub_id = p.id), ARRAY[]::integer[]) as years
                FROM pubs p
                LEFT JOIN pub_stats s ON p.id = s.pub_id
                WHERE 1=1"#
@@ -64,9 +66,34 @@ pub mod ssr_export {
 
         query.push_str(" ORDER BY p.name");
 
-        let pubs = sqlx::query_as::<sqlx::Postgres, PubDetail>(&query)
+        let rows = sqlx::query(&query)
             .fetch_all(pool)
             .await?;
+
+        let pubs = rows.into_iter().map(|row| {
+            PubDetail {
+                id: row.get("id"),
+                name: row.get("name"),
+                address: row.get("address"),
+                town: row.get("town"),
+                county: row.get("county"),
+                postcode: row.get("postcode"),
+                closed: row.get("closed"),
+                untappd_id: row.get("untappd_id"),
+                google_maps_id: row.get("google_maps_id"),
+                whatpub_id: row.get("whatpub_id"),
+                rgl_id: row.get("rgl_id"),
+                lat: row.get("lat"),
+                lon: row.get("lon"),
+                current_streak: row.get("current_streak"),
+                last_5_years: row.get("last_5_years"),
+                last_10_years: row.get("last_10_years"),
+                total_years: row.get("total_years"),
+                first_year: row.get("first_year"),
+                latest_year: row.get("latest_year"),
+                years: row.get("years"),
+            }
+        }).collect();
 
         Ok(pubs)
     }
@@ -89,9 +116,42 @@ pub mod ssr_export {
         
         match get_export_data(&state.pool, filter).await {
             Ok(data) => {
-                let mut wtr = csv::Writer::from_writer(Vec::new());
+                let mut wtr = csv::WriterBuilder::new()
+                    .has_headers(false) // We'll write it manually
+                    .from_writer(Vec::new());
+
+                let _ = wtr.write_record(&[
+                    "id", "name", "address", "town", "county", "postcode", "closed",
+                    "untappd_id", "google_maps_id", "whatpub_id", "rgl_id",
+                    "lat", "lon", "current_streak", "last_5_years", "last_10_years",
+                    "total_years", "first_year", "latest_year", "years"
+                ]);
+
                 for p in data {
-                    let _ = wtr.serialize(p);
+
+                    let years_str = p.years.iter().map(|y| y.to_string()).collect::<Vec<_>>().join(";");
+                    let _ = wtr.write_record(&[
+                        p.id.to_string(),
+                        p.name,
+                        p.address,
+                        p.town,
+                        p.county,
+                        p.postcode,
+                        p.closed.to_string(),
+                        p.untappd_id.unwrap_or_default(),
+                        p.google_maps_id.unwrap_or_default(),
+                        p.whatpub_id.unwrap_or_default(),
+                        p.rgl_id.unwrap_or_default(),
+                        p.lat.map(|v| v.to_string()).unwrap_or_default(),
+                        p.lon.map(|v| v.to_string()).unwrap_or_default(),
+                        p.current_streak.to_string(),
+                        p.last_5_years.to_string(),
+                        p.last_10_years.to_string(),
+                        p.total_years.to_string(),
+                        p.first_year.map(|v| v.to_string()).unwrap_or_default(),
+                        p.latest_year.map(|v| v.to_string()).unwrap_or_default(),
+                        years_str,
+                    ]);
                 }
                 let csv_data = wtr.into_inner().unwrap_or_default();
                 
