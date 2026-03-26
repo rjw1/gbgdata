@@ -1,6 +1,15 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary, YearSummary};
+use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary, YearSummary, SortMode};
 use uuid::Uuid;
+
+fn get_order_by(sort: Option<SortMode>, default: &str) -> String {
+    match sort.unwrap_or_default() {
+        SortMode::Name => "ORDER BY p.name ASC".to_string(),
+        SortMode::Streak => "ORDER BY COALESCE(s.current_streak, 0) DESC, p.name ASC".to_string(),
+        SortMode::TotalEntries => "ORDER BY COALESCE(s.total_years, 0) DESC, p.name ASC".to_string(),
+        SortMode::Distance => format!("ORDER BY {} ASC, p.name ASC", default),
+    }
+}
 
 #[server(GetYears, "/api")]
 pub async fn get_years() -> Result<Vec<YearSummary>, ServerFnError> {
@@ -123,7 +132,7 @@ pub async fn get_county_details(county: String, year: Option<i32>) -> Result<Cou
 }
 
 #[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>, year: Option<i32>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -137,7 +146,9 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
-                  s.latest_year
+                  s.latest_year,
+                  s.total_years as total_years_rank,
+                  s.current_streak
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id"#
     );
@@ -163,24 +174,20 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
 
     if let Some(_y) = year {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
-        // We need a separate way to bind i32, but for now we'll push it as string if we can, 
-        // or better, handle the query specifically.
-        // Actually sqlx QueryAs doesn't support dynamic number of binds easily with different types.
-        // Let's use a simpler approach for now since year is i32.
     }
 
-    query.push_str(" ORDER BY p.name");
+    query.push_str(&format!(" {}", get_order_by(sort, "p.name")));
 
-    // Re-writing to handle types properly
+    // Handle types properly - since year is i32, we need a custom query builder or fixed variants
     let pubs = if let Some(y) = year {
-        if let Some(t) = binds.get(1) {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(t).bind(y).fetch_all(&pool).await
+        if binds.len() == 2 {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(&binds[1]).bind(y).fetch_all(&pool).await
         } else {
             sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(y).fetch_all(&pool).await
         }
     } else {
-        if let Some(t) = binds.get(1) {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(t).fetch_all(&pool).await
+        if binds.len() == 2 {
+            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(&binds[1]).fetch_all(&pool).await
         } else {
             sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).fetch_all(&pool).await
         }
@@ -190,7 +197,7 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
 }
 
 #[server(GetPubs, "/api")]
-pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -198,17 +205,22 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let pubs = sqlx::query_as::<_, PubSummary>(
-        r#"SELECT p.id, p.name, 
+        &format!(
+            r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.county, '') as county, 
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
-                  s.latest_year
+                  s.latest_year,
+                  s.total_years as total_years_rank,
+                  s.current_streak
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.county ILIKE $1
-           ORDER BY p.name LIMIT 50"#
+           {} LIMIT 50"#,
+            get_order_by(sort, "p.name")
+        )
     )
     .bind(format!("%{}%", query))
     .fetch_all(&pool)
@@ -219,7 +231,7 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
 }
 
 #[server(GetRankedPubs, "/api")]
-pub async fn get_ranked_pubs() -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_ranked_pubs(sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -227,18 +239,21 @@ pub async fn get_ranked_pubs() -> Result<Vec<PubSummary>, ServerFnError> {
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let pubs = sqlx::query_as::<_, PubSummary>(
-        r#"SELECT p.id, p.name, 
+        &format!(
+            r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.county, '') as county, 
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
                   s.latest_year,
-                  s.total_years as "total_years_rank"
+                  s.total_years as total_years_rank,
+                  s.current_streak
            FROM pubs p
            JOIN pub_stats s ON p.id = s.pub_id
-           ORDER BY s.total_years DESC, p.name ASC
-           LIMIT 100"#
+           {} LIMIT 100"#,
+            get_order_by(sort, "s.total_years DESC")
+        )
     )
     .fetch_all(&pool)
     .await
@@ -293,7 +308,7 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
 }
 
 #[server(GetNearbyPubs, "/api")]
-pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -301,18 +316,23 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<V
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let pubs = sqlx::query_as::<_, PubSummary>(
-        r#"SELECT p.id, p.name, 
+        &format!(
+            r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.county, '') as county, 
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters,
-                  s.latest_year
+                  s.latest_year,
+                  s.total_years as total_years_rank,
+                  s.current_streak
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.location IS NOT NULL 
              AND ST_DWithin(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
-           ORDER BY distance_meters LIMIT 50"#
+           {} LIMIT 50"#,
+            get_order_by(sort, "distance_meters")
+        )
     )
     .bind(lat)
     .bind(lon)

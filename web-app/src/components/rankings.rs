@@ -1,14 +1,24 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 use crate::server::get_ranked_pubs;
+use crate::models::SortMode;
+use crate::components::sort::SortSelector;
 
 #[component]
 pub fn Rankings() -> impl IntoView {
-    let pubs = Resource::new(|| (), |_| async move { get_ranked_pubs().await });
+    let (sort, set_sort) = signal(SortMode::TotalEntries); // Default to Total for Rankings
+
+    let pubs = Resource::new(
+        move || sort.get(), 
+        |s| async move { get_ranked_pubs(Some(s)).await }
+    );
 
     view! {
         <div class="explorer-container">
-            <h1>"All-Time GBG Rankings"</h1>
+            <div class="explorer-header">
+                <h1>"All-Time GBG Rankings"</h1>
+                <SortSelector sort=sort.into() set_sort=set_sort.into() />
+            </div>
             <p class="years-range">"The most frequently featured pubs in Good Beer Guide history (Top 100)"</p>
 
             <div class="pub-grid">

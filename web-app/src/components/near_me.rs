@@ -1,39 +1,76 @@
 use leptos::prelude::*;
-use crate::server::{get_nearby_pubs, geocode_manual};
 use leptos_router::components::A;
+use crate::server::{get_nearby_pubs, geocode_manual};
+use crate::models::{PubSummary, SortMode};
+use wasm_bindgen::prelude::*;
+use crate::components::sort::SortSelector;
 
 #[component]
 pub fn NearMe() -> impl IntoView {
-    let (center_coords, set_center_coords) = signal(None::<(f64, f64)>);
-    let (radius_km, set_radius_km) = signal(5.0);
-    let (search_query, set_search_query) = signal(String::new());
+    let (lat_lon, set_lat_lon) = signal(None::<(f64, f64)>);
+    let (radius, set_radius) = signal(5000.0); // 5km default
+    let (search_text, set_search_text) = signal(String::new());
+    let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(None::<String>);
-    let (is_loading, set_loading) = signal(false);
+    let (sort, set_sort) = signal(SortMode::Distance); // Default to Distance for Near Me
 
     let pubs = Resource::new(
-        move || (center_coords.get(), radius_km.get()),
-        move |(coords, r)| async move {
-            match coords {
-                Some((lat, lon)) => get_nearby_pubs(lat, lon, r * 1000.0).await,
-                None => Ok(Vec::new()),
+        move || (lat_lon.get(), radius.get(), sort.get()),
+        |(coords, r, s)| async move {
+            if let Some((lat, lon)) = coords {
+                get_nearby_pubs(lat, lon, r, Some(s)).await
+            } else {
+                Ok(Vec::new())
             }
-        },
+        }
     );
 
-    let handle_search = move || {
-        let query = search_query.get();
+    let get_gps = move |_| {
+        set_loading.set(true);
+        set_error.set(None);
+        
+        let window = web_sys::window().expect("no window");
+        let navigator = window.navigator();
+        let geolocation = navigator.geolocation().expect("no geolocation");
+
+        let success_cb = Closure::wrap(Box::new(move |pos: JsValue| {
+            let coords = js_sys::Reflect::get(&pos, &JsValue::from_str("coords")).unwrap();
+            let lat = js_sys::Reflect::get(&coords, &JsValue::from_str("latitude")).unwrap().as_f64().unwrap();
+            let lon = js_sys::Reflect::get(&coords, &JsValue::from_str("longitude")).unwrap().as_f64().unwrap();
+            
+            set_lat_lon.set(Some((lat, lon)));
+            set_loading.set(false);
+        }) as Box<dyn FnMut(JsValue)>);
+
+        let error_cb = Closure::wrap(Box::new(move |err: JsValue| {
+            let msg = js_sys::Reflect::get(&err, &JsValue::from_str("message")).unwrap().as_string().unwrap_or_else(|| "Unknown error".into());
+            set_error.set(Some(msg));
+            set_loading.set(false);
+        }) as Box<dyn FnMut(JsValue)>);
+
+        let _ = geolocation.get_current_position(
+            success_cb.as_ref().unchecked_ref(),
+            Some(error_cb.as_ref().unchecked_ref()),
+        );
+
+        success_cb.forget();
+        error_cb.forget();
+    };
+
+    let handle_search = move |_| {
+        let query = search_text.get();
         if query.trim().is_empty() { return; }
         
         set_loading.set(true);
         set_error.set(None);
-        
-        leptos::task::spawn_local(async move {
+
+        spawn_local(async move {
             match geocode_manual(query).await {
                 Ok(Some(coords)) => {
-                    set_center_coords.set(Some(coords));
+                    set_lat_lon.set(Some(coords));
                 }
                 Ok(None) => {
-                    set_error.set(Some("Location not found.".to_string()));
+                    set_error.set(Some("Location not found".into()));
                 }
                 Err(e) => {
                     set_error.set(Some(e.to_string()));
@@ -43,149 +80,80 @@ pub fn NearMe() -> impl IntoView {
         });
     };
 
-    let handle_gps = move |_| {
-        use leptos::wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-        
-        set_loading.set(true);
-        let window = web_sys::window().expect("no global `window` exists");
-        let navigator = window.navigator();
-        let geolocation = navigator.geolocation().expect("geolocation not available");
-
-        let success_callback = move |pos: JsValue| {
-            let pos_obj = js_sys::Object::from(pos);
-            let coords_obj = js_sys::Reflect::get(&pos_obj, &JsValue::from_str("coords")).unwrap();
-            let lat = js_sys::Reflect::get(&coords_obj, &JsValue::from_str("latitude")).unwrap().as_f64().unwrap();
-            let lon = js_sys::Reflect::get(&coords_obj, &JsValue::from_str("longitude")).unwrap().as_f64().unwrap();
-            
-            set_center_coords.set(Some((lat, lon)));
-            set_error.set(None);
-            set_loading.set(false);
-        };
-
-        let error_callback = move |err: JsValue| {
-            let message = js_sys::Reflect::get(&err, &JsValue::from_str("message")).unwrap().as_string().unwrap_or_default();
-            set_error.set(Some(message));
-            set_loading.set(false);
-        };
-
-        let success_closure = Closure::wrap(Box::new(success_callback) as Box<dyn FnMut(JsValue)>);
-        let error_closure = Closure::wrap(Box::new(error_callback) as Box<dyn FnMut(JsValue)>);
-
-        let _ = geolocation.get_current_position_with_error_callback(
-            success_closure.as_ref().unchecked_ref(),
-            Some(error_closure.as_ref().unchecked_ref()),
-        );
-
-        success_closure.forget();
-        error_closure.forget();
-    };
-
     view! {
         <div class="near-me-container">
-            <h1>"Find GBG Pubs"</h1>
+            <h1>"Pubs Near Me"</h1>
             
             <div class="search-controls">
                 <div class="search-row">
-                    <input
-                        type="text"
-                        placeholder="Town, Postcode, or Lat,Lon..."
-                        on:input=move |ev| set_search_query.set(event_target_value(&ev))
-                        on:keydown=move |ev| {
-                            if ev.key() == "Enter" {
-                                handle_search();
-                            }
-                        }
-                        prop:value=move || search_query.get()
+                    <input 
+                        type="text" 
+                        placeholder="Enter Town or Postcode..." 
                         class="location-input"
+                        on:input=move |ev| set_search_text.set(event_target_value(&ev))
+                        on:keydown=move |ev| { if ev.key() == "Enter" { handle_search(()); } }
+                        prop:value=search_text
                     />
-                    <button 
-                        on:click=move |_| handle_search() 
-                        class="search-btn" 
-                        disabled=move || is_loading.get()
-                    >
-                        "Search"
+                    <button class="location-btn" on:click=handle_search disabled=loading>
+                        "🔍 Search"
                     </button>
-                    <button 
-                        on:click=handle_gps 
-                        class="gps-btn" 
-                        disabled=move || is_loading.get()
-                    >
-                        "GPS"
+                    <button class="gps-btn" on:click=get_gps disabled=loading>
+                        "📍 Use GPS"
                     </button>
                 </div>
 
                 <div class="radius-row">
-                    <label>"Radius: " {move || radius_km.get()} " km"</label>
+                    <label>"Search Radius: "{move || (radius.get() / 1000.0).to_string()}" km"</label>
                     <div class="radius-inputs">
-                        <input
-                            type="range"
-                            min="1"
-                            max="50"
-                            step="1"
-                            on:input=move |ev| {
-                                if let Ok(val) = event_target_value(&ev).parse::<f64>() {
-                                    set_radius_km.set(val);
-                                }
-                            }
-                            prop:value=move || radius_km.get()
+                        <input 
+                            type="range" 
+                            min="500" 
+                            max="50000" 
+                            step="500"
+                            prop:value=move || radius.get().to_string()
+                            on:input=move |ev| set_radius.set(event_target_value(&ev).parse().unwrap_or(5000.0))
                         />
-                        <input
-                            type="number"
-                            min="1"
-                            max="100"
-                            on:input=move |ev| {
-                                if let Ok(val) = event_target_value(&ev).parse::<f64>() {
-                                    set_radius_km.set(val);
-                                }
-                            }
-                            prop:value=move || radius_km.get()
+                        <input 
+                            type="number" 
                             class="radius-num"
+                            prop:value=move || (radius.get() / 1000.0).to_string()
+                            on:input=move |ev| set_radius.set(event_target_value(&ev).parse::<f64>().unwrap_or(5.0) * 1000.0)
                         />
                     </div>
                 </div>
+
+                <div class="sort-row">
+                    <SortSelector sort=sort.into() set_sort=set_sort.into() show_distance=lat_lon.get().is_some() />
+                </div>
             </div>
 
-            {move || is_loading.get().then(|| view! { <p class="loading">"Updating location..."</p> })}
-            {move || error.get().map(|err| view! { <p class="error">"Error: " {err}</p> })}
+            {move || if loading.get() {
+                view! { <p class="loading">"Locating..."</p> }.into_any()
+            } else {
+                core::iter::empty().collect_view().into_any()
+            }}
+
+            {move || error.get().map(|msg| view! { <p class="error">{msg}</p> })}
 
             <div class="pub-grid">
-                <Suspense fallback=move || view! { <p>"Searching for nearby pubs..."</p> }>
-                    {move || {
-                        pubs.get().map(|res| {
-                            match res {
-                                Ok(data) => {
-                                    if center_coords.get().is_some() && data.is_empty() {
-                                        view! { <p>"No GBG pubs found within this distance."</p> }.into_any()
-                                    } else {
-                                        data.into_iter()
-                                            .map(|p| {
-                                                let dist = p.distance_meters.map(|d| format!("{:.1}km away", d / 1000.0)).unwrap_or_default();
-                                                let id = p.id;
-                                                let name = p.name.clone();
-                                                let town = p.town.clone();
-                                                let county = p.county.clone();
-                                                view! {
-                                                    <A href=format!("/pub/{}", id) attr:class="pub-card">
-                                                        <h3>{name}</h3>
-                                                        <p>{format!("{}, {}", town, county)}</p>
-                                                        {if p.closed {
-                                                            view! { <span class="badge closed">"Closed"</span> }.into_any()
-                                                        } else {
-                                                            let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
-                                                            view! { <span class="badge open">{year_text}</span> }.into_any()
-                                                        }}
-                                                        <span class="distance-tag">{dist}</span>
-                                                    </A>
-                                                }
-                                            })
-                                            .collect_view()
-                                            .into_any()
-                                    }
-                                }
-                                Err(e) => view! { <p class="error">"Error: " {e.to_string()}</p> }.into_any(),
+                <Suspense fallback=|| view! { <p>"Finding pubs..."</p> }>
+                    {move || pubs.get().map(|res| match res {
+                        Ok(list) => list.into_iter().map(|p| {
+                            let id = p.id;
+                            let name = p.name.clone();
+                            let town = p.town.clone();
+                            let county = p.county.clone();
+                            let dist = p.distance_meters.map(|d| format!("{:.1} km", d / 1000.0));
+                            view! {
+                                <A href=format!("/pub/{}", id) attr:class="pub-card">
+                                    <h3>{name}</h3>
+                                    <p>{format!("{}, {}", town, county)}</p>
+                                    {dist.map(|d| view! { <span class="distance-tag">{d}</span> })}
+                                </A>
                             }
-                        })
-                    }}
+                        }).collect_view().into_any(),
+                        Err(e) => view! { <p class="error">{e.to_string()}</p> }.into_any(),
+                    })}
                 </Suspense>
             </div>
         </div>

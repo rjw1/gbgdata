@@ -2,6 +2,8 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use crate::server::{get_counties, get_county_details, get_pubs_by_location, get_years, get_year_counties};
+use crate::models::{CountyDetails, PubSummary, YearSummary, SortMode};
+use crate::components::sort::SortSelector;
 
 #[component]
 pub fn ExportButtons(
@@ -244,17 +246,21 @@ pub fn LocationPubList() -> impl IntoView {
     let town = move || params.get().get("town").map(String::from);
     let outcode = move || params.get().get("outcode").map(String::from);
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok());
+    let (sort, set_sort) = signal(SortMode::default());
 
     let pubs = Resource::new(
-        move || (county(), town(), outcode(), year()),
-        |(c, t, o, y)| async move { get_pubs_by_location(c, t, o, y).await }
+        move || (county(), town(), outcode(), year(), sort.get()),
+        |(c, t, o, y, s)| async move { get_pubs_by_location(c, t, o, y, Some(s)).await }
     );
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
                 <Breadcrumbs county=Some(county()) town=town() outcode=outcode() year=year() />
-                <ExportButtons county=Some(county()) town=town() outcode=outcode() year=year() />
+                <div class="header-controls">
+                    <SortSelector sort=sort.into() set_sort=set_sort.into() />
+                    <ExportButtons county=Some(county()) town=town() outcode=outcode() year=year() />
+                </div>
             </div>
             <h1>
                 {move || {

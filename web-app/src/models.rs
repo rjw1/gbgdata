@@ -13,6 +13,16 @@ pub struct PubSummary {
     pub distance_meters: Option<f64>,
     pub latest_year: Option<i32>,
     pub total_years_rank: Option<i64>,
+    pub current_streak: Option<i32>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum SortMode {
+    #[default]
+    Name,
+    Streak,
+    TotalEntries,
+    Distance,
 }
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]

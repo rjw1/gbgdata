@@ -103,17 +103,54 @@ nav a {
   display: inline-block;
 }
 
-.search-input {
-  width: 100%;
-  padding: 1rem;
-  font-size: 1.2rem;
-  border: 2px solid var(--forest-green);
-  border-radius: 8px;
+.list-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
   margin-bottom: 2rem;
-  box-sizing: border-box;
-  background-color: var(--card-bg);
-  color: var(--dark-text);
-  -webkit-appearance: none;
+  flex-wrap: wrap;
+
+  .search-input {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 300px;
+  }
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.sort-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+
+  .sort-label {
+    font-weight: bold;
+    color: #888;
+    white-space: nowrap;
+  }
+
+  select {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--dark-text);
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
+
+    &:focus {
+      border-color: var(--forest-green);
+    }
+  }
 }
 
 .search-controls {
