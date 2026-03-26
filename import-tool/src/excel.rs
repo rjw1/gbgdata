@@ -67,7 +67,7 @@ mod tests {
         // It's brittle but good for initial verification.
         // We know the file is at ../../../GBG counties one sheet Duncan 2025.xlsx relative to the project root
         // When running cargo test, it runs from the package root (import-tool/)
-        let path = "../../../GBG counties one sheet Duncan 2025.xlsx";
+        let path = "../GBG counties one sheet Duncan 2025.xlsx";
         let result = parse_excel(path);
         assert!(result.is_ok(), "Failed to parse excel file: {:?}", result.err());
         let pubs = result.unwrap();

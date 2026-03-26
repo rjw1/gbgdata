@@ -2,7 +2,7 @@ use calamine::{Reader, Xlsx, open_workbook};
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    let path = "../../../GBG counties one sheet Duncan 2025.xlsx";
+    let path = "GBG counties one sheet Duncan 2025.xlsx";
     let mut workbook: Xlsx<_> = open_workbook(path)?;
     println!("Sheet names: {:?}", workbook.sheet_names());
     let sheet_name = workbook.sheet_names()[0].clone();

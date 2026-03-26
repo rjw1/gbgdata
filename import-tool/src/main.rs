@@ -19,7 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to connect to the database")?;
 
-    let excel_path = "../../GBG counties one sheet Duncan 2025.xlsx";
+    let excel_path = "GBG counties one sheet Duncan 2025.xlsx";
+
     println!("Parsing Excel file: {}...", excel_path);
     
     let pubs = excel::parse_excel(excel_path)
