@@ -1,12 +1,12 @@
-use axum::Router;
-use web_app::app::*;
-use web_app::shell;
-use leptos::prelude::*;
-use leptos_axum::{generate_route_list, LeptosRoutes};
-use sqlx::postgres::PgPoolOptions;
-
+#[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
+    use axum::Router;
+    use web_app::app::*;
+    use leptos::prelude::*;
+    use leptos_axum::{generate_route_list, LeptosRoutes};
+    use sqlx::postgres::PgPoolOptions;
+
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
@@ -22,26 +22,37 @@ async fn main() {
     let routes = generate_route_list(App);
 
     let app = Router::new()
-        .leptos_routes_with_context(&leptos_options, routes, {
-            let pool = pool.clone();
-            move || provide_context(pool.clone())
-        }, {
-            let leptos_options = leptos_options.clone();
-            move || shell(leptos_options.clone())
-        })
-        .fallback(leptos_axum::render_app_to_stream_with_context(
-            leptos_options,
+        .leptos_routes_with_context(
+            &leptos_options,
+            routes,
             {
                 let pool = pool.clone();
                 move || provide_context(pool.clone())
             },
-            App,
+            {
+                let leptos_options = leptos_options.clone();
+                move || shell(leptos_options.clone())
+            },
+        )
+        .fallback(leptos_axum::render_app_to_stream_with_context(
+            {
+                let pool = pool.clone();
+                move || provide_context(pool.clone())
+            },
+            {
+                let leptos_options = leptos_options.clone();
+                move || shell(leptos_options.clone())
+            },
         ))
         .with_state(leptos_options);
 
     // run our app with hyper
-    // `axum::Server` is a re-export of `hyper::Server`
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    logging::log!("listening on http://{}", &addr);
+    println!("listening on http://{}", &addr);
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(not(feature = "ssr"))]
+fn main() {
+    // no-op for non-ssr feature
 }
