@@ -71,3 +71,27 @@ pub async fn export_json(
         Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
+
+pub async fn export_csv(
+    State(state): State<AppState>,
+    Query(filter): Query<ExportFilter>,
+) -> impl IntoResponse {
+    use axum::http::header;
+    
+    match get_export_data(&state.pool, filter).await {
+        Ok(data) => {
+            let mut wtr = csv::Writer::from_writer(Vec::new());
+            // Header is automatic from struct if we used Serialize, but let's be explicit or use Serialize
+            for p in data {
+                let _ = wtr.serialize(p);
+            }
+            let csv_data = wtr.into_inner().unwrap_or_default();
+            
+            (
+                [(header::CONTENT_TYPE, "text/csv"), (header::CONTENT_DISPOSITION, "attachment; filename=\"pubs.csv\"")],
+                csv_data
+            ).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
