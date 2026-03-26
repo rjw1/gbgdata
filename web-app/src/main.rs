@@ -37,7 +37,7 @@ async fn main() {
         .route("/export/csv", get(export_csv))
         .route("/export/parquet", get(export_parquet))
         .leptos_routes_with_context(
-            &leptos_options,
+            &state,
             routes,
             {
                 let pool = pool.clone();
@@ -57,7 +57,6 @@ async fn main() {
                 let leptos_options = leptos_options.clone();
                 move || shell(leptos_options.clone())
             },
-            App,
         ))
         .with_state(state);
 

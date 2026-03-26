@@ -1,17 +1,24 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Query, State, FromRef},
     response::IntoResponse,
     Json,
 };
 use leptos::prelude::LeptosOptions;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::PgPool;
 use crate::models::PubDetail;
+use anyhow::Result;
 
 #[derive(Clone)]
 pub struct AppState {
     pub leptos_options: LeptosOptions,
     pub pool: PgPool,
+}
+
+impl FromRef<AppState> for LeptosOptions {
+    fn from_ref(state: &AppState) -> Self {
+        state.leptos_options.clone()
+    }
 }
 
 #[derive(Deserialize)]
@@ -21,21 +28,21 @@ pub struct ExportFilter {
     pub outcode: Option<String>,
 }
 
-pub async fn get_export_data(pool: &PgPool, filter: ExportFilter) -> anyhow::Result<Vec<PubDetail>> {
+pub async fn get_export_data(pool: &PgPool, filter: ExportFilter) -> Result<Vec<PubDetail>> {
     let mut query = String::from(
         r#"SELECT p.id, p.name, 
-                  COALESCE(p.address, '') as "address!", 
-                  COALESCE(p.town, '') as "town!", 
-                  COALESCE(p.county, '') as "county!", 
-                  COALESCE(p.postcode, '') as "postcode!", 
-                  COALESCE(p.closed, false) as "closed!",
+                  COALESCE(p.address, '') as "address", 
+                  COALESCE(p.town, '') as "town", 
+                  COALESCE(p.county, '') as "county", 
+                  COALESCE(p.postcode, '') as "postcode", 
+                  COALESCE(p.closed, false) as "closed",
                   p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
                   ST_Y(p.location::geometry) as lat,
                   ST_X(p.location::geometry) as lon,
-                  COALESCE(s.current_streak, 0) as "current_streak!",
-                  COALESCE(s.last_5_years, 0) as "last_5_years!",
-                  COALESCE(s.last_10_years, 0) as "last_10_years!",
-                  COALESCE(s.total_years, 0) as "total_years!",
+                  COALESCE(s.current_streak, 0) as "current_streak",
+                  COALESCE(s.last_5_years, 0) as "last_5_years",
+                  COALESCE(s.last_10_years, 0) as "last_10_years",
+                  COALESCE(s.total_years, 0) as "total_years",
                   s.first_year,
                   s.latest_year
            FROM pubs p
@@ -55,7 +62,7 @@ pub async fn get_export_data(pool: &PgPool, filter: ExportFilter) -> anyhow::Res
 
     query.push_str(" ORDER BY p.name");
 
-    let pubs = sqlx::query_as::<_, PubDetail>(&query)
+    let pubs = sqlx::query_as::<sqlx::Postgres, PubDetail>(&query)
         .fetch_all(pool)
         .await?;
 
@@ -100,7 +107,7 @@ pub async fn export_parquet(
     Query(filter): Query<ExportFilter>,
 ) -> impl IntoResponse {
     use axum::http::header;
-    use arrow::array::{StringArray, BooleanArray, Float64Array, Int32Array};
+    use arrow::array::{StringArray, BooleanArray, Float64Array, Int32Array, Int64Array};
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
     use parquet::arrow::arrow_writer::ArrowWriter;
@@ -122,17 +129,17 @@ pub async fn export_parquet(
                 Field::new("total_years", DataType::Int64, false),
             ]));
 
-            let id_array = StringArray::from(data.iter().map(|p| p.id.to_string()).collect::<Vec<_>>());
-            let name_array = StringArray::from(data.iter().map(|p| p.name.clone()).collect::<Vec<_>>());
-            let addr_array = StringArray::from(data.iter().map(|p| p.address.clone()).collect::<Vec<_>>());
-            let town_array = StringArray::from(data.iter().map(|p| p.town.clone()).collect::<Vec<_>>());
-            let county_array = StringArray::from(data.iter().map(|p| p.county.clone()).collect::<Vec<_>>());
-            let post_array = StringArray::from(data.iter().map(|p| p.postcode.clone()).collect::<Vec<_>>());
-            let closed_array = BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<_>>());
-            let lat_array = Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<_>>());
-            let lon_array = Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<_>>());
-            let streak_array = Int32Array::from(data.iter().map(|p| p.current_streak).collect::<Vec<_>>());
-            let total_array = arrow::array::Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<_>>());
+            let id_array = StringArray::from(data.iter().map(|p| p.id.to_string()).collect::<Vec<String>>());
+            let name_array = StringArray::from(data.iter().map(|p| p.name.clone()).collect::<Vec<String>>());
+            let addr_array = StringArray::from(data.iter().map(|p| p.address.clone()).collect::<Vec<String>>());
+            let town_array = StringArray::from(data.iter().map(|p| p.town.clone()).collect::<Vec<String>>());
+            let county_array = StringArray::from(data.iter().map(|p| p.county.clone()).collect::<Vec<String>>());
+            let post_array = StringArray::from(data.iter().map(|p| p.postcode.clone()).collect::<Vec<String>>());
+            let closed_array = BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<bool>>());
+            let lat_array = Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<Option<f64>>>());
+            let lon_array = Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<Option<f64>>>());
+            let streak_array = Int32Array::from(data.iter().map(|p| p.current_streak).collect::<Vec<i32>>());
+            let total_array = Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<i64>>());
 
             let batch = RecordBatch::try_new(schema.clone(), vec![
                 Arc::new(id_array),
