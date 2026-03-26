@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: gbgdata
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d gbgdata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: web-app/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/gbgdata
+      - LEPTOS_SITE_ADDR=0.0.0.0:3000
+      - LEPTOS_SITE_ROOT=site
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy

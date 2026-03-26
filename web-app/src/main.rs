@@ -44,6 +44,7 @@ async fn main() {
                 move || shell(leptos_options.clone())
             },
         ))
+        .static_assets(&leptos_options)
         .with_state(leptos_options);
 
     // run our app with hyper
