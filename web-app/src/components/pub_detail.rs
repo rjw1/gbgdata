@@ -71,8 +71,30 @@ pub fn PubDetail() -> impl IntoView {
                                         }}
 
                                         <div class="stats-card">
-                                            <h2>"GBG History"</h2>
-                                            <p>"Years in Guide: " {years.len()}</p>
+                                            <h2>"GBG Statistics"</h2>
+                                            <div class="stats-grid">
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"Current Streak"</span>
+                                                    <span class="stat-value">{p.current_streak} " years"</span>
+                                                </div>
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"Last 5 Years"</span>
+                                                    <span class="stat-value">{format!("{} / 5", p.last_5_years)}</span>
+                                                    <div class="progress-bar"><div class="progress" style=format!("width: {}%", p.last_5_years * 20)></div></div>
+                                                </div>
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"Last 10 Years"</span>
+                                                    <span class="stat-value">{format!("{} / 10", p.last_10_years)}</span>
+                                                    <div class="progress-bar"><div class="progress" style=format!("width: {}%", p.last_10_years * 10)></div></div>
+                                                </div>
+                                                <div class="stat-item">
+                                                    <span class="stat-label">"Total Inclusions"</span>
+                                                    <span class="stat-value">{p.total_years}</span>
+                                                </div>
+                                            </div>
+                                            <p class="years-range">"First seen: " {p.first_year.unwrap_or(0)} " | Latest: " {p.latest_year.unwrap_or(0)}</p>
+                                            
+                                            <h3>"Full History"</h3>
                                             <div class="year-grid">
                                                 {years.into_iter()
                                                     .map(|year| view! { <span class="year-tag">{year}</span> })

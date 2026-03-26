@@ -27,5 +27,11 @@ pub struct PubDetail {
     pub rgl_id: Option<String>,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
+    pub current_streak: i32,
+    pub last_5_years: i64,
+    pub last_10_years: i64,
+    pub total_years: i64,
+    pub first_year: Option<i32>,
+    pub latest_year: Option<i32>,
     pub years: Vec<i32>,
 }

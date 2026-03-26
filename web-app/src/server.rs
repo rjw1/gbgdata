@@ -68,16 +68,24 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let pub_info = sqlx::query!(
-        r#"SELECT id, name, 
-                  COALESCE(address, '') as "address!", 
-                  COALESCE(town, '') as "town!", 
-                  COALESCE(county, '') as "county!", 
-                  COALESCE(postcode, '') as "postcode!", 
-                  COALESCE(closed, false) as "closed!",
-                  untappd_id, google_maps_id, whatpub_id, rgl_id,
-                  ST_Y(location::geometry) as lat,
-                  ST_X(location::geometry) as lon
-           FROM pubs WHERE id = $1"#,
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.address, '') as "address!", 
+                  COALESCE(p.town, '') as "town!", 
+                  COALESCE(p.county, '') as "county!", 
+                  COALESCE(p.postcode, '') as "postcode!", 
+                  COALESCE(p.closed, false) as "closed!",
+                  p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
+                  ST_Y(p.location::geometry) as lat,
+                  ST_X(p.location::geometry) as lon,
+                  COALESCE(s.current_streak, 0) as "current_streak!",
+                  COALESCE(s.last_5_years, 0) as "last_5_years!",
+                  COALESCE(s.last_10_years, 0) as "last_10_years!",
+                  COALESCE(s.total_years, 0) as "total_years!",
+                  s.first_year,
+                  s.latest_year
+           FROM pubs p
+           LEFT JOIN pub_stats s ON p.id = s.pub_id
+           WHERE p.id = $1"#,
         id
     )
     .fetch_one(&pool)
@@ -106,6 +114,12 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         rgl_id: pub_info.rgl_id,
         lat: pub_info.lat,
         lon: pub_info.lon,
+        current_streak: pub_info.current_streak,
+        last_5_years: pub_info.last_5_years,
+        last_10_years: pub_info.last_10_years,
+        total_years: pub_info.total_years,
+        first_year: pub_info.first_year,
+        latest_year: pub_info.latest_year,
         years,
     })
 }
