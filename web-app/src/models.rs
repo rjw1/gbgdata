@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PubSummary {
     pub id: Uuid,
@@ -38,18 +39,21 @@ pub struct PubDetail {
     pub years: Vec<i32>,
 }
 
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CountySummary {
     pub name: String,
     pub pub_count: i64,
 }
 
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TownSummary {
     pub name: String,
     pub pub_count: i64,
 }
 
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OutcodeSummary {
     pub name: String,
