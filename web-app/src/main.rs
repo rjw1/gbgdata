@@ -21,7 +21,11 @@ async fn main() {
     // Generate the list of routes in your Leptos App
     let routes = generate_route_list(App);
 
+    use tower_http::services::ServeDir;
+
     let app = Router::new()
+        .nest_service("/pkg", ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)))
+        .nest_service("/assets", ServeDir::new(&*leptos_options.site_root))
         .leptos_routes_with_context(
             &leptos_options,
             routes,
@@ -44,7 +48,6 @@ async fn main() {
                 move || shell(leptos_options.clone())
             },
         ))
-        .static_assets(&leptos_options)
         .with_state(leptos_options);
 
     // run our app with hyper

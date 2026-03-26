@@ -21,6 +21,7 @@ getrandom = { version = "0.2", features = ["js"] }
 chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"], optional = true }
 dotenvy = { version = "0.15", optional = true }
+tower-http = { version = "0.6", features = ["fs"], optional = true }
 
 [features]
 hydrate = [
@@ -34,6 +35,7 @@ ssr = [
     "dep:leptos_axum",
     "dep:sqlx",
     "dep:dotenvy",
+    "dep:tower-http",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
