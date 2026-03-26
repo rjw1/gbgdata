@@ -50,7 +50,8 @@ pub fn PubDetail() -> impl IntoView {
                                             {if closed {
                                                 view! { <span class="badge closed">"Closed"</span> }.into_any()
                                             } else {
-                                                view! { <span class="badge open">"In GBG"</span> }.into_any()
+                                                let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
+                                                view! { <span class="badge open">{year_text}</span> }.into_any()
                                             }}
                                         </div>
 

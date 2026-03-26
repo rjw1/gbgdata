@@ -80,6 +80,12 @@ pub fn NearMe() -> impl IntoView {
                                                     <A href=format!("/pub/{}", id) attr:class="pub-card">
                                                         <h3>{name}</h3>
                                                         <p>{format!("{}, {}", town, county)}</p>
+                                                        {if p.closed {
+                                                            view! { <span class="badge closed">"Closed"</span> }.into_any()
+                                                        } else {
+                                                            let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
+                                                            view! { <span class="badge open">{year_text}</span> }.into_any()
+                                                        }}
                                                         <span class="distance-tag">{dist}</span>
                                                     </A>
                                                 }

@@ -77,15 +77,17 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
     let pubs = if let Some(t) = town {
         sqlx::query_as!(
             PubSummary,
-            r#"SELECT id, name, 
-                      COALESCE(town, '') as "town!", 
-                      COALESCE(county, '') as "county!", 
-                      COALESCE(postcode, '') as "postcode!", 
-                      COALESCE(closed, false) as "closed!",
-                      NULL::float8 as distance_meters
-               FROM pubs 
-               WHERE county = $1 AND town = $2
-               ORDER BY name"#,
+            r#"SELECT p.id, p.name, 
+                      COALESCE(p.town, '') as "town!", 
+                      COALESCE(p.county, '') as "county!", 
+                      COALESCE(p.postcode, '') as "postcode!", 
+                      COALESCE(p.closed, false) as "closed!",
+                      NULL::float8 as distance_meters,
+                      s.latest_year
+               FROM pubs p
+               LEFT JOIN pub_stats s ON p.id = s.pub_id
+               WHERE p.county = $1 AND p.town = $2
+               ORDER BY p.name"#,
             county, t
         )
         .fetch_all(&pool)
@@ -93,15 +95,17 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
     } else if let Some(o) = outcode {
         sqlx::query_as!(
             PubSummary,
-            r#"SELECT id, name, 
-                      COALESCE(town, '') as "town!", 
-                      COALESCE(county, '') as "county!", 
-                      COALESCE(postcode, '') as "postcode!", 
-                      COALESCE(closed, false) as "closed!",
-                      NULL::float8 as distance_meters
-               FROM pubs 
-               WHERE county = $1 AND SPLIT_PART(postcode, ' ', 1) = $2
-               ORDER BY name"#,
+            r#"SELECT p.id, p.name, 
+                      COALESCE(p.town, '') as "town!", 
+                      COALESCE(p.county, '') as "county!", 
+                      COALESCE(p.postcode, '') as "postcode!", 
+                      COALESCE(p.closed, false) as "closed!",
+                      NULL::float8 as distance_meters,
+                      s.latest_year
+               FROM pubs p
+               LEFT JOIN pub_stats s ON p.id = s.pub_id
+               WHERE p.county = $1 AND SPLIT_PART(p.postcode, ' ', 1) = $2
+               ORDER BY p.name"#,
             county, o
         )
         .fetch_all(&pool)
@@ -109,15 +113,17 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
     } else {
         sqlx::query_as!(
             PubSummary,
-            r#"SELECT id, name, 
-                      COALESCE(town, '') as "town!", 
-                      COALESCE(county, '') as "county!", 
-                      COALESCE(postcode, '') as "postcode!", 
-                      COALESCE(closed, false) as "closed!",
-                      NULL::float8 as distance_meters
-               FROM pubs 
-               WHERE county = $1
-               ORDER BY name"#,
+            r#"SELECT p.id, p.name, 
+                      COALESCE(p.town, '') as "town!", 
+                      COALESCE(p.county, '') as "county!", 
+                      COALESCE(p.postcode, '') as "postcode!", 
+                      COALESCE(p.closed, false) as "closed!",
+                      NULL::float8 as distance_meters,
+                      s.latest_year
+               FROM pubs p
+               LEFT JOIN pub_stats s ON p.id = s.pub_id
+               WHERE p.county = $1
+               ORDER BY p.name"#,
             county
         )
         .fetch_all(&pool)
@@ -137,15 +143,17 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
 
     let pubs = sqlx::query_as!(
         PubSummary,
-        r#"SELECT id, name, 
-                  COALESCE(town, '') as "town!", 
-                  COALESCE(county, '') as "county!", 
-                  COALESCE(postcode, '') as "postcode!", 
-                  COALESCE(closed, false) as "closed!",
-                  NULL::float8 as distance_meters
-           FROM pubs 
-           WHERE name ILIKE $1 OR town ILIKE $1 OR county ILIKE $1
-           ORDER BY name LIMIT 50"#,
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as "town!", 
+                  COALESCE(p.county, '') as "county!", 
+                  COALESCE(p.postcode, '') as "postcode!", 
+                  COALESCE(p.closed, false) as "closed!",
+                  NULL::float8 as distance_meters,
+                  s.latest_year
+           FROM pubs p
+           LEFT JOIN pub_stats s ON p.id = s.pub_id
+           WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.county ILIKE $1
+           ORDER BY p.name LIMIT 50"#,
         format!("%{}%", query)
     )
     .fetch_all(&pool)
@@ -165,15 +173,17 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<V
 
     let pubs = sqlx::query_as!(
         PubSummary,
-        r#"SELECT id, name, 
-                  COALESCE(town, '') as "town!", 
-                  COALESCE(county, '') as "county!", 
-                  COALESCE(postcode, '') as "postcode!", 
-                  COALESCE(closed, false) as "closed!",
-                  ST_Distance(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as "distance_meters"
-           FROM pubs 
-           WHERE location IS NOT NULL 
-             AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as "town!", 
+                  COALESCE(p.county, '') as "county!", 
+                  COALESCE(p.postcode, '') as "postcode!", 
+                  COALESCE(p.closed, false) as "closed!",
+                  ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as "distance_meters",
+                  s.latest_year
+           FROM pubs p
+           LEFT JOIN pub_stats s ON p.id = s.pub_id
+           WHERE p.location IS NOT NULL 
+             AND ST_DWithin(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
            ORDER BY distance_meters LIMIT 50"#,
         lat, lon, radius_meters
     )

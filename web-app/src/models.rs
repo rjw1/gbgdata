@@ -10,6 +10,7 @@ pub struct PubSummary {
     pub postcode: String,
     pub closed: bool,
     pub distance_meters: Option<f64>,
+    pub latest_year: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
