@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use crate::server::get_pubs;
+use crate::models::PubSummary;
 use leptos_router::components::A;
 
 #[component]
@@ -36,11 +37,17 @@ pub fn PubList() -> impl IntoView {
                                             .map(|p| {
                                                 let id = p.id;
                                                 let name = p.name.clone();
+                                                let click_name = name.clone();
                                                 let town = p.town.clone();
                                                 let county = p.county.clone();
                                                 let closed = p.closed;
                                                 view! {
-                                                    <A href=format!("/pub/{}", id) attr:class="pub-card">
+                                                    <A href=format!("/pub/{}", id) 
+                                                       attr:class="pub-card"
+                                                       on:click=move |_| {
+                                                           leptos::logging::log!("Clicked pub {}", click_name);
+                                                       }
+                                                    >
                                                         <h3>{name}</h3>
                                                         <p>{format!("{}, {}", town, county)}</p>
                                                         {if closed {

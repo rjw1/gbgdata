@@ -7,16 +7,19 @@ use uuid::Uuid;
 pub fn PubDetail() -> impl IntoView {
     let params = use_params_map();
     let id = move || {
-        params.with(|p| {
-            p.get("id")
-                .as_ref()
-                .and_then(|id| Uuid::parse_str(id).ok())
-        })
+        let params_val = params.get();
+        let id_str = params_val.get("id");
+        leptos::logging::log!
+("PubDetail ID update: {:?}", id_str);
+        let id_str = id_str?.clone();
+        Uuid::parse_str(&id_str).ok()
     };
 
     let pub_data = Resource::new(
         move || id(),
         move |id| async move {
+            leptos::logging::log!
+("Fetching pub detail for {:?}", id);
             match id {
                 Some(uuid) => get_pub_detail(uuid).await,
                 None => Err(ServerFnError::new("Invalid Pub ID")),
