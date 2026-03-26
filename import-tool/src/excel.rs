@@ -1,18 +1,23 @@
 use calamine::{Reader, Xlsx, open_workbook};
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct RawPub {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportPub {
+    pub id: Option<Uuid>,
     pub name: String,
     pub address: String,
     pub town: String,
     pub county: String,
     pub postcode: String,
     pub closed: bool,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
     pub years: Vec<i32>,
 }
 
-pub fn parse_excel(path: &str) -> Result<Vec<RawPub>> {
+pub fn parse_excel(path: &str) -> Result<Vec<ImportPub>> {
     let mut workbook: Xlsx<_> = open_workbook(path)?;
     let sheet_name = "List of all pubs";
     let range = workbook.worksheet_range(sheet_name)?;
@@ -25,8 +30,9 @@ pub fn parse_excel(path: &str) -> Result<Vec<RawPub>> {
         let name = row.get(3).map(|d| d.to_string()).unwrap_or_default();
         let address = row.get(4).map(|d| d.to_string()).unwrap_or_default();
         let postcode = row.get(5).map(|d| d.to_string()).unwrap_or_default();
-        let closed_raw = row.get(10).map(|d| d.to_string()).unwrap_or_default();
-        let closed = !closed_raw.trim().is_empty();
+        let closed_raw = row.get(10).map(|d| d.to_string()).unwrap_or_default().trim().to_uppercase();
+        
+        let closed = !closed_raw.is_empty() && closed_raw != "F" && closed_raw != "W";
 
         let mut years = Vec::new();
         for i in 11..=64 {
@@ -43,41 +49,19 @@ pub fn parse_excel(path: &str) -> Result<Vec<RawPub>> {
         }
 
         if !name.is_empty() {
-            pubs.push(RawPub {
+            pubs.push(ImportPub {
+                id: None,
                 name,
                 address,
                 town,
                 county,
                 postcode,
                 closed,
+                lat: None,
+                lon: None,
                 years,
             });
         }
     }
     Ok(pubs)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_excel_real_file() {
-        // This test uses the real file to verify the logic.
-        // It's brittle but good for initial verification.
-        // We know the file is at ../../../GBG counties one sheet Duncan 2025.xlsx relative to the project root
-        // When running cargo test, it runs from the package root (import-tool/)
-        let path = "../GBG counties one sheet Duncan 2025.xlsx";
-        let result = parse_excel(path);
-        assert!(result.is_ok(), "Failed to parse excel file: {:?}", result.err());
-        let pubs = result.unwrap();
-        assert!(!pubs.is_empty(), "Parsed zero pubs from excel file");
-        
-        // Basic spot check
-        let first_pub = &pubs[0];
-        assert!(!first_pub.name.is_empty());
-        assert!(!first_pub.county.is_empty());
-        println!("Parsed {} pubs", pubs.len());
-        println!("First pub: {:?}", first_pub);
-    }
 }

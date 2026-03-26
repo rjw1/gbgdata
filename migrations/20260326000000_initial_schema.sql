@@ -15,7 +15,8 @@ CREATE TABLE pubs (
     whatpub_id VARCHAR(255),
     rgl_id VARCHAR(255),
     untappd_verified BOOLEAN DEFAULT FALSE,
-    last_seen DATE DEFAULT CURRENT_DATE
+    last_seen DATE DEFAULT CURRENT_DATE,
+    UNIQUE(name, town, postcode)
 );
 
 CREATE INDEX idx_pubs_location ON pubs USING GIST (location);

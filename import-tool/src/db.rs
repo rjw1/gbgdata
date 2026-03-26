@@ -1,54 +1,78 @@
+use sqlx::postgres::PgPool;
 use anyhow::Result;
-use crate::excel::RawPub;
-use sqlx::{PgPool, Postgres, Transaction};
+use crate::excel::ImportPub;
+use uuid::Uuid;
 
-/// Inserts a pub and its historical inclusion records into the database.
-///
-/// This operation is performed within a transaction to ensure that either both the pub
-/// and its history are recorded, or nothing is recorded in case of an error.
-pub async fn insert_pub(pool: &PgPool, raw_pub: &RawPub) -> Result<()> {
-    let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
-
-    // Insert the pub and get the generated UUID
-    let pub_id: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO pubs (name, address, town, county, postcode, closed) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
-         RETURNING id",
-    )
-    .bind(&raw_pub.name)
-    .bind(&raw_pub.address)
-    .bind(&raw_pub.town)
-    .bind(&raw_pub.county)
-    .bind(&raw_pub.postcode)
-    .bind(raw_pub.closed)
-    .fetch_one(&mut *tx)
-    .await?;
-
-    // Insert each year the pub was in the Good Beer Guide
-    for year in &raw_pub.years {
-        sqlx::query(
-            "INSERT INTO gbg_history (pub_id, year) 
-             VALUES ($1, $2) 
-             ON CONFLICT (pub_id, year) DO NOTHING",
+pub async fn insert_pub(pool: &PgPool, pub_data: &ImportPub) -> Result<Uuid> {
+    let pub_id: Uuid = if let Some(existing_id) = pub_data.id {
+        sqlx::query_scalar!(
+            r#"UPDATE pubs SET 
+                  name = $1, address = $2, town = $3, county = $4, postcode = $5, 
+                  closed = $6, 
+                  location = CASE WHEN $7::float8 IS NOT NULL AND $8::float8 IS NOT NULL 
+                             THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography 
+                             ELSE location END
+               WHERE id = $9
+               RETURNING id"#,
+            pub_data.name,
+            pub_data.address,
+            pub_data.town,
+            pub_data.county,
+            pub_data.postcode,
+            pub_data.closed,
+            pub_data.lat,
+            pub_data.lon,
+            existing_id
         )
-        .bind(pub_id)
-        .bind(year)
-        .execute(&mut *tx)
+        .fetch_one(pool)
+        .await?
+    } else {
+        sqlx::query_scalar!(
+            r#"INSERT INTO pubs (name, address, town, county, postcode, closed, location)
+               VALUES ($1, $2, $3, $4, $5, $6, 
+                       CASE WHEN $7::float8 IS NOT NULL AND $8::float8 IS NOT NULL 
+                            THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography 
+                            ELSE NULL END)
+               ON CONFLICT (name, town, postcode) 
+               DO UPDATE SET 
+                  address = EXCLUDED.address,
+                  county = EXCLUDED.county,
+                  closed = EXCLUDED.closed,
+                  location = COALESCE(EXCLUDED.location, pubs.location)
+               RETURNING id"#,
+            pub_data.name,
+            pub_data.address,
+            pub_data.town,
+            pub_data.county,
+            pub_data.postcode,
+            pub_data.closed,
+            pub_data.lat,
+            pub_data.lon
+        )
+        .fetch_one(pool)
+        .await?
+    };
+
+    for year in &pub_data.years {
+        sqlx::query!(
+            "INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            pub_id,
+            *year
+        )
+        .execute(pool)
         .await?;
     }
 
-    tx.commit().await?;
-    Ok(())
+    Ok(pub_id)
 }
 
-pub async fn update_pub_location(pool: &sqlx::PgPool, id: uuid::Uuid, lat: f64, lon: f64) -> Result<()> {
-    sqlx::query(
-        "UPDATE pubs SET location = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography 
-         WHERE id = $3"
+pub async fn update_pub_location(pool: &PgPool, pub_id: Uuid, lat: f64, lon: f64) -> Result<()> {
+    sqlx::query!(
+        "UPDATE pubs SET location = ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography WHERE id = $3",
+        lat,
+        lon,
+        pub_id
     )
-    .bind(lon)
-    .bind(lat)
-    .bind(id)
     .execute(pool)
     .await?;
     Ok(())

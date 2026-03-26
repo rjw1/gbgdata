@@ -1,93 +1,126 @@
 mod excel;
 mod db;
 mod geocoder;
+mod parsers;
 
-use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
 use std::env;
-use anyhow::Context;
+use dotenvy::dotenv;
+use anyhow::Result;
+use clap::{Parser, ValueEnum};
 use geocoder::Geocoder;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Command to run: import (default) or geocode
+    #[arg(index = 1, default_value = "import")]
+    command: String,
+
+    /// Path to the file to import
+    #[arg(short, long)]
+    file: Option<String>,
+
+    /// Format of the file
+    #[arg(short = 'F', long, value_enum, default_value = "excel")]
+    format: Format,
+
+    /// Batch size for geocoding
+    #[arg(short, long, default_value_t = 100)]
+    batch: i64,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Format {
+    Excel,
+    Csv,
+    Json,
+    Parquet,
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     dotenv().ok();
-    
-    let database_url = env::var("DATABASE_URL")
-        .context("DATABASE_URL must be set in .env or environment")?;
-    
+    let args = Args::parse();
+
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
-        .await
-        .context("Failed to connect to the database")?;
+        .await?;
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 && args[1] == "geocode" {
-        geocode_pubs(&pool).await?;
+    if args.command == "geocode" {
+        run_geocoder(&pool, args.batch).await?;
     } else {
-        import_pubs(&pool).await?;
+        run_import(&pool, args).await?;
     }
 
     Ok(())
 }
 
-async fn import_pubs(pool: &sqlx::PgPool) -> anyhow::Result<()> {
-    let excel_path = "GBG counties one sheet Duncan 2025.xlsx";
-    println!("Parsing Excel file: {}...", excel_path);
+async fn run_import(pool: &sqlx::PgPool, args: Args) -> Result<()> {
+    let file_path = args.file.unwrap_or_else(|| "GBG counties one sheet Duncan 2025.xlsx".to_string());
     
-    let pubs = excel::parse_excel(excel_path)
-        .context("Failed to parse Excel file")?;
-    
+    println!("Importing from {} (Format: {:?})...", file_path, args.format);
+
+    let pubs = match args.format {
+        Format::Excel => excel::parse_excel(&file_path)?,
+        Format::Csv => parsers::parse_csv(&file_path)?,
+        Format::Json => parsers::parse_json(&file_path)?,
+        Format::Parquet => parsers::parse_parquet(&file_path)?,
+    };
+
     println!("Found {} pubs. Starting import...", pubs.len());
-    
-    let mut imported = 0;
-    for p in pubs {
+
+    for (i, p) in pubs.into_iter().enumerate() {
         if let Err(e) = db::insert_pub(pool, &p).await {
-            eprintln!("Failed to insert pub '{}': {:?}", p.name, e);
-        } else {
-            imported += 1;
-            if imported % 100 == 0 {
-                println!("Imported {} pubs...", imported);
-            }
+            eprintln!("Error importing pub {}: {}", p.name, e);
+        }
+        if (i + 1) % 100 == 0 {
+            println!("Imported {} pubs...", i + 1);
         }
     }
-    
-    println!("Import complete! Successfully imported {} pubs.", imported);
+
+    println!("Import complete!");
     Ok(())
 }
 
-async fn geocode_pubs(pool: &sqlx::PgPool) -> anyhow::Result<()> {
-    let geocoder = Geocoder::new();
+async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
+    println!("Fetching {} pubs needing geocoding...", limit);
     
-    let pubs_to_geocode = sqlx::query!(
-        "SELECT id, address, town, postcode FROM pubs WHERE location IS NULL LIMIT 5000"
+    let pubs = sqlx::query!(
+        "SELECT id, name, COALESCE(address, '') as address, COALESCE(town, '') as town, COALESCE(postcode, '') as postcode 
+         FROM pubs WHERE location IS NULL AND closed = false LIMIT $1",
+        limit
     )
     .fetch_all(pool)
     .await?;
 
-    println!("Found {} pubs to geocode. (Batch limit 5000)", pubs_to_geocode.len());
+    let total = pubs.len();
+    println!("Found {} pubs. Starting geocoding...", total);
+    let geocoder = Geocoder::new();
 
-    for p in pubs_to_geocode {
-        println!("Geocoding: {}, {}...", p.town.as_deref().unwrap_or(""), p.postcode.as_deref().unwrap_or(""));
-        match geocoder.geocode(
-            p.address.as_deref().unwrap_or(""),
-            p.town.as_deref().unwrap_or(""),
-            p.postcode.as_deref().unwrap_or("")
-        ).await {
+    for (i, p) in pubs.into_iter().enumerate() {
+        let name = p.name;
+        let town = p.town.unwrap_or_default();
+        let address = p.address.unwrap_or_default();
+        let postcode = p.postcode.unwrap_or_default();
+
+        println!("[{}/{}] Geocoding {} in {}...", i + 1, total, name, town);
+        
+        match geocoder.geocode(&address, &town, &postcode).await {
             Ok(Some((lat, lon))) => {
                 db::update_pub_location(pool, p.id, lat, lon).await?;
                 println!("  Found: {}, {}", lat, lon);
             }
             Ok(None) => {
-                println!("  Not found.");
+                println!("  Not found");
             }
             Err(e) => {
-                eprintln!("  Error: {:?}", e);
-                break; // Stop on fatal errors (like 403)
+                eprintln!("  Error: {}", e);
             }
         }
     }
 
-    println!("Geocoding batch complete.");
     Ok(())
 }
