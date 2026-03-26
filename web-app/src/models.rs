@@ -13,7 +13,8 @@ pub struct PubSummary {
     pub latest_year: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PubDetail {
     pub id: Uuid,
     pub name: String,
