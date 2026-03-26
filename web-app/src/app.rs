@@ -10,6 +10,56 @@ use leptos_router::{
     components::A,
 };
 
+#[component]
+pub fn ThemeToggle() -> impl IntoView {
+    let (theme, set_theme) = signal(String::from("system"));
+
+    Effect::new(move |_| {
+        let storage = window().local_storage().ok().flatten();
+        if let Some(s) = storage {
+            if let Ok(Some(saved)) = s.get_item("theme") {
+                set_theme.set(saved);
+            }
+        }
+    });
+
+    Effect::new(move |_| {
+        let t = theme.get();
+        let document = document().document_element().expect("no document element");
+        let storage = window().local_storage().ok().flatten();
+        
+        if t == "system" {
+            let _ = document.remove_attribute("data-theme");
+        } else {
+            let _ = document.set_attribute("data-theme", &t);
+        }
+
+        if let Some(s) = storage {
+            let _ = s.set_item("theme", &t);
+        }
+    });
+
+    let toggle = move |_| {
+        set_theme.update(|t| {
+            *t = match t.as_str() {
+                "light" => "dark".to_string(),
+                "dark" => "system".to_string(),
+                _ => "light".to_string(),
+            };
+        });
+    };
+
+    view! {
+        <button on:click=toggle class="theme-toggle">
+            {move || match theme.get().as_str() {
+                "light" => "☀️ Light",
+                "dark" => "🌙 Dark",
+                _ => "🌓 Auto",
+            }}
+        </button>
+    }
+}
+
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     provide_meta_context();
     view! {
@@ -24,6 +74,10 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <link rel="manifest" href="/assets/manifest.json"/>
                 <script>
                     "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/assets/sw.js'); }); }"
+                </script>
+                // Blocking script to prevent theme flash
+                <script>
+                    "try { let t = localStorage.getItem('theme'); if (t && t !== 'system') document.documentElement.setAttribute('data-theme', t); } catch (e) {}"
                 </script>
                 <Stylesheet id="leptos" href="/pkg/web-app.css"/>
                 <Title text="gbgdata - Pub Explorer"/>
@@ -41,11 +95,14 @@ pub fn App() -> impl IntoView {
         <Router>
             <main>
                 <nav>
-                    <A href="/">"Home"</A>
-                    " | "
-                    <A href="/explore">"Explore"</A>
-                    " | "
-                    <A href="/near-me">"Near Me"</A>
+                    <div class="nav-links">
+                        <A href="/">"Home"</A>
+                        " | "
+                        <A href="/explore">"Explore"</A>
+                        " | "
+                        <A href="/near-me">"Near Me"</A>
+                    </div>
+                    <ThemeToggle />
                 </nav>
                 <Routes fallback=|| view! { "Page not found." }>
                     <Route path=path!("/") view=PubList/>
