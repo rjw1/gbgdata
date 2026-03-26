@@ -1,4 +1,120 @@
+:root {
+  --forest-green: #1a3c34;
+  --amber: #ffbf00;
+  --off-white: #f8f9fa;
+  --dark-text: #212529;
+  --error: #dc3545;
+  --closed: #6c757d;
+  --open: #28a745;
+}
+
 body {
-	font-family: sans-serif;
-	text-align: center;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: var(--off-white);
+  color: var(--dark-text);
+  margin: 0;
+  padding: 0;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+nav {
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 2rem;
+}
+
+nav a {
+  color: var(--forest-green);
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.search-input {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.2rem;
+  border: 2px solid var(--forest-green);
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  box-sizing: border-box;
+}
+
+.pub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.pub-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-left: 5px solid var(--amber);
+}
+
+.pub-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: white;
+  margin-top: 0.5rem;
+}
+
+.badge.closed { background-color: var(--closed); }
+.badge.open { background-color: var(--open); }
+
+.pub-detail h1 {
+  color: var(--forest-green);
+  margin-bottom: 0.5rem;
+}
+
+.stats-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  margin: 2rem 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.year-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.year-tag {
+  background: var(--amber);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.external-links ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 1.5rem;
+}
+
+.external-links a {
+  color: var(--forest-green);
+  font-weight: bold;
 }
