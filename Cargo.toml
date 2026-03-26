@@ -1,0 +1,3 @@
+[workspace]
+members = ["import-tool"]
+resolver = "2"

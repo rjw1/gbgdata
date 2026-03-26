@@ -1,0 +1,13 @@
+[package]
+name = "import-tool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+calamine = "0.24"
+sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+dotenvy = "0.15"
+anyhow = "1.0"
