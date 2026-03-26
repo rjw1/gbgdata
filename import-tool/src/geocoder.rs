@@ -12,22 +12,27 @@ struct NominatimResponse {
 
 pub struct Geocoder {
     client: Client,
+    url: String,
+    is_local: bool,
 }
 
 impl Geocoder {
     pub fn new() -> Self {
         let client = Client::builder()
-            .user_agent("gbgdata-importer (bob@example.com)") // Replace with actual contact if needed
+            .user_agent("gbgdata-importer (bob@example.com)")
             .build()
             .unwrap();
-        Self { client }
+        
+        let url = std::env::var("NOMINATIM_URL").unwrap_or_else(|_| "http://localhost:8080/search".to_string());
+        let is_local = url.contains("localhost") || url.contains("127.0.0.1");
+
+        Self { client, url, is_local }
     }
 
     pub async fn geocode(&self, address: &str, town: &str, postcode: &str) -> Result<Option<(f64, f64)>> {
         let query = format!("{}, {}, {}", address, town, postcode);
-        let url = "https://nominatim.openstreetmap.org/search";
         
-        let resp = self.client.get(url)
+        let resp = self.client.get(&self.url)
             .query(&[
                 ("q", query),
                 ("format", "json".to_string()),
@@ -42,8 +47,10 @@ impl Geocoder {
 
         let results: Vec<NominatimResponse> = resp.json().await?;
         
-        // Nominatim policy: 1 request per second
-        sleep(Duration::from_secs(1)).await;
+        // Only sleep if NOT local (Nominatim policy: 1 request per second)
+        if !self.is_local {
+            sleep(Duration::from_secs(1)).await;
+        }
 
         if let Some(res) = results.first() {
             let lat = res.lat.parse::<f64>()?;

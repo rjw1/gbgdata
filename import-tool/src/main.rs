@@ -60,12 +60,12 @@ async fn geocode_pubs(pool: &sqlx::PgPool) -> anyhow::Result<()> {
     let geocoder = Geocoder::new();
     
     let pubs_to_geocode = sqlx::query!(
-        "SELECT id, address, town, postcode FROM pubs WHERE location IS NULL LIMIT 100"
+        "SELECT id, address, town, postcode FROM pubs WHERE location IS NULL LIMIT 5000"
     )
     .fetch_all(pool)
     .await?;
 
-    println!("Found {} pubs to geocode. (Batch limit 100)", pubs_to_geocode.len());
+    println!("Found {} pubs to geocode. (Batch limit 5000)", pubs_to_geocode.len());
 
     for p in pubs_to_geocode {
         println!("Geocoding: {}, {}...", p.town.as_deref().unwrap_or(""), p.postcode.as_deref().unwrap_or(""));
