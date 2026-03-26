@@ -12,6 +12,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    volumes:
+      - db-data:/var/lib/postgresql/data
 
   web:
     build:
@@ -34,14 +36,33 @@ services:
 
   nominatim:
     image: mediagis/nominatim:4.4
+    shm_size: 4gb
     restart: always
     ports:
       - "8080:8080"
     environment:
       - PBF_URL=https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf
       - REPLICATION_URL=https://download.geofabrik.de/europe/united-kingdom-updates/
+      - NOMINATIM_POSTGRESQL_SHARED_BUFFERS=2GB
+      - NOMINATIM_POSTGRESQL_MAINTENANCE_WORK_MEM=4GB
     volumes:
       - nominatim-data:/var/lib/postgresql/14/main
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        service postgresql start
+        if [ ! -f /var/lib/postgresql/14/main/import-finished ]; then
+          echo "Import not finished. Resuming..."
+          # If database doesn't exist at all, we'd need a full import, 
+          # but here we assume it crashed mid-way.
+          # We use --continue to pick up where we left off.
+          sudo -E -u nominatim nominatim import --continue indexing || \
+          sudo -E -u nominatim nominatim import --continue db-postprocess
+          touch /var/lib/postgresql/14/main/import-finished
+        fi
+        # Start the actual service
+        sudo -E -u nominatim nominatim run-php-server --host 0.0.0.0 --port 8080
 
 volumes:
   nominatim-data:
+  db-data:
