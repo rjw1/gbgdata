@@ -29,6 +29,35 @@ pub async fn get_pubs(query: String) -> Result<Vec<PubSummary>, ServerFnError> {
     Ok(pubs)
 }
 
+#[server(GetNearbyPubs, "/api")]
+pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64) -> Result<Vec<PubSummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let pubs = sqlx::query_as!(
+        PubSummary,
+        r#"SELECT id, name, 
+                  COALESCE(town, '') as "town!", 
+                  COALESCE(county, '') as "county!", 
+                  COALESCE(postcode, '') as "postcode!", 
+                  COALESCE(closed, false) as "closed!",
+                  ST_Distance(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as "distance_meters"
+           FROM pubs 
+           WHERE location IS NOT NULL 
+             AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+           ORDER BY distance_meters LIMIT 50"#,
+        lat, lon, radius_meters
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(pubs)
+}
+
 #[server(GetPubDetail, "/api")]
 pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
     use sqlx::PgPool;
