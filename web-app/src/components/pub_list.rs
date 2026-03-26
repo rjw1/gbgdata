@@ -26,7 +26,10 @@ pub fn PubList() -> impl IntoView {
                     }
                     prop:value=query
                 />
-                <SortSelector sort=sort.into() set_sort=set_sort.into() />
+                <SortSelector 
+                    sort=Signal::from(sort) 
+                    on_change=Callback::new(move |mode| set_sort.set(mode)) 
+                />
             </div>
 
             <div class="pub-grid">
@@ -38,11 +41,26 @@ pub fn PubList() -> impl IntoView {
                             let town = p.town.clone();
                             let county = p.county.clone();
                             let closed = p.closed;
+                            let total = p.total_years_rank.unwrap_or(0);
+                            let streak = p.current_streak.unwrap_or(0);
                             let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
+                            
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
                                     <p>{format!("{}, {}", town, county)}</p>
+                                    
+                                    <div class="card-stats">
+                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
+                                            <span class="count">{total}</span>
+                                            <span class="label">" entries"</span>
+                                        </div>
+                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::Streak { "highlight" } else { "" })>
+                                            <span class="count">{streak}</span>
+                                            <span class="label">" streak"</span>
+                                        </div>
+                                    </div>
+
                                     {if closed {
                                         view! { <span class="badge closed">"Closed"</span> }.into_any()
                                     } else {

@@ -346,6 +346,36 @@ nav a {
 .badge.closed { background-color: var(--closed); }
 .badge.open { background-color: var(--open); }
 
+.card-stats {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stat-badge {
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: var(--off-white);
+  border: 1px solid var(--border);
+  color: var(--forest-green);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  &.highlight {
+    border-color: var(--amber);
+    background: color-mix(in srgb, var(--amber), transparent 90%);
+  }
+
+  .label {
+    opacity: 0.7;
+    font-weight: normal;
+  }
+}
+
 .pub-detail h1 {
   color: var(--forest-green);
   margin-bottom: 0.5rem;

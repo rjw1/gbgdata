@@ -3,8 +3,8 @@ use crate::models::SortMode;
 
 #[component]
 pub fn SortSelector(
-    #[prop(into)] sort: Signal<SortMode>,
-    #[prop(into)] set_sort: WriteSignal<SortMode>,
+    sort: Signal<SortMode>,
+    on_change: Callback<SortMode>,
     #[prop(default = false)] show_distance: bool,
 ) -> impl IntoView {
     view! {
@@ -19,7 +19,7 @@ pub fn SortSelector(
                         "distance" => SortMode::Distance,
                         _ => SortMode::Name,
                     };
-                    set_sort.set(mode);
+                    on_change.run(mode);
                 }
                 prop:value=move || match sort.get() {
                     SortMode::Name => "name",

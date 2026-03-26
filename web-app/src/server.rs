@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary, YearSummary, SortMode};
 use uuid::Uuid;
 
+#[cfg(feature = "ssr")]
 fn get_order_by(sort: Option<SortMode>, default: &str) -> String {
     match sort.unwrap_or_default() {
         SortMode::Name => "ORDER BY p.name ASC".to_string(),

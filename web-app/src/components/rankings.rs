@@ -17,7 +17,10 @@ pub fn Rankings() -> impl IntoView {
         <div class="explorer-container">
             <div class="explorer-header">
                 <h1>"All-Time GBG Rankings"</h1>
-                <SortSelector sort=sort.into() set_sort=set_sort.into() />
+                <SortSelector 
+                    sort=Signal::from(sort) 
+                    on_change=Callback::new(move |mode| set_sort.set(mode)) 
+                />
             </div>
             <p class="years-range">"The most frequently featured pubs in Good Beer Guide history (Top 100)"</p>
 
@@ -29,7 +32,8 @@ pub fn Rankings() -> impl IntoView {
                             let name = p.name.clone();
                             let town = p.town.clone();
                             let county = p.county.clone();
-                            let count = p.total_years_rank.unwrap_or(0);
+                            let total = p.total_years_rank.unwrap_or(0);
+                            let streak = p.current_streak.unwrap_or(0);
                             let closed = p.closed;
                             
                             view! {
@@ -38,10 +42,18 @@ pub fn Rankings() -> impl IntoView {
                                     <div class="ranking-content">
                                         <h3>{name}</h3>
                                         <p>{format!("{}, {}", town, county)}</p>
-                                        <div class="ranking-badge">
-                                            <span class="count">{count}</span>
-                                            <span class="label">" appearances"</span>
+                                        
+                                        <div class="card-stats">
+                                            <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
+                                                <span class="count">{total}</span>
+                                                <span class="label">" entries"</span>
+                                            </div>
+                                            <div class=format!("stat-badge {}", if sort.get() == SortMode::Streak { "highlight" } else { "" })>
+                                                <span class="count">{streak}</span>
+                                                <span class="label">" streak"</span>
+                                            </div>
                                         </div>
+
                                         {if closed {
                                             view! { <span class="badge closed small">"Closed"</span> }.into_any()
                                         } else {
