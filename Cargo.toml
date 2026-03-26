@@ -1,3 +1,6 @@
 [workspace]
-members = ["import-tool"]
+members = [
+    "import-tool",
+    "web-app",
+]
 resolver = "2"
