@@ -25,9 +25,9 @@ pub fn ExportButtons(
         <div class="export-container">
             <span class="export-label">"Export: "</span>
             <div class="export-group">
-                <a href=format!("/export/json{}", query_string) class="export-link" download="pubs.json">"JSON"</a>
-                <a href=format!("/export/csv{}", query_string) class="export-link" download="pubs.csv">"CSV"</a>
-                <a href=format!("/export/parquet{}", query_string) class="export-link" download="pubs.parquet">"Parquet"</a>
+                <a href=format!("/export/json{}", query_string) class="export-link" rel="external" download="pubs.json">"JSON"</a>
+                <a href=format!("/export/csv{}", query_string) class="export-link" rel="external" download="pubs.csv">"CSV"</a>
+                <a href=format!("/export/parquet{}", query_string) class="export-link" rel="external" download="pubs.parquet">"Parquet"</a>
             </div>
         </div>
     }
