@@ -25,11 +25,11 @@ pub fn parse_excel(path: &str) -> Result<Vec<ImportPub>> {
     let mut pubs = Vec::new();
     // Skip first 5 rows (header is row 4, data starts at 5)
     for row in range.rows().skip(5) {
-        let county = row.get(1).map(|d| d.to_string()).unwrap_or_default();
-        let town = row.get(2).map(|d| d.to_string()).unwrap_or_default();
-        let name = row.get(3).map(|d| d.to_string()).unwrap_or_default();
-        let address = row.get(4).map(|d| d.to_string()).unwrap_or_default();
-        let postcode = row.get(5).map(|d| d.to_string()).unwrap_or_default();
+        let county = row.get(1).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let town = row.get(2).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let name = row.get(3).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let address = row.get(4).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let postcode = row.get(5).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
         let closed_raw = row.get(10).map(|d| d.to_string()).unwrap_or_default().trim().to_uppercase();
         
         let closed = !closed_raw.is_empty() && closed_raw != "F" && closed_raw != "W";
