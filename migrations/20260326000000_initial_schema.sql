@@ -23,7 +23,7 @@ CREATE INDEX idx_pubs_name ON pubs (name);
 
 CREATE TABLE gbg_history (
     id SERIAL PRIMARY KEY,
-    pub_id UUID REFERENCES pubs(id) ON DELETE CASCADE,
+    pub_id UUID NOT NULL REFERENCES pubs(id) ON DELETE CASCADE,
     year INTEGER NOT NULL,
     UNIQUE(pub_id, year)
 );
