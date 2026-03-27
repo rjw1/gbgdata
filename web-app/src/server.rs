@@ -295,7 +295,11 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
     }
 
     // 2. Fallback to local Nominatim
-    let nominatim_url = std::env::var("NOMINATIM_URL").unwrap_or_else(|_| "http://nominatim:8080/search".to_string());
+    let nominatim_url = std::env::var("NOMINATIM_URL").unwrap_or_default();
+    if nominatim_url.is_empty() {
+        return Ok(None);
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("gbgdata-web (bob@example.com)")
         .build()
