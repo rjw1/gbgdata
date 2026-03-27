@@ -6,32 +6,34 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use arrow::array::{Array, StringArray, BooleanArray, Float64Array};
 use uuid::Uuid;
 
+use std::collections::HashMap;
+
 pub fn parse_csv(path: &str) -> Result<Vec<ImportPub>> {
     let file = File::open(path)?;
     let mut rdr = csv::Reader::from_reader(file);
     let mut pubs = Vec::new();
 
     for result in rdr.deserialize() {
-        let record: serde_json::Value = result?;
+        let record: HashMap<String, String> = result?;
         
-        let years = record["years"].as_str()
-            .unwrap_or_default()
+        let years = record.get("years")
+            .unwrap_or(&String::new())
             .split(';')
             .filter_map(|s| s.parse::<i32>().ok())
             .collect();
 
-        let name = record["name"].as_str().unwrap_or_default().trim().to_string();
+        let name = record.get("name").map(|s| s.trim().to_string()).unwrap_or_default();
         if !name.is_empty() {
             pubs.push(ImportPub {
-                id: record["id"].as_str().and_then(|s| Uuid::parse_str(s).ok()),
+                id: record.get("id").and_then(|s| Uuid::parse_str(s).ok()),
                 name,
-                address: record["address"].as_str().unwrap_or_default().trim().to_string(),
-                town: record["town"].as_str().unwrap_or_default().trim().to_string(),
-                county: record["county"].as_str().unwrap_or_default().trim().to_string(),
-                postcode: record["postcode"].as_str().unwrap_or_default().trim().to_string(),
-                closed: record["closed"].as_str().map(|s| s == "true").unwrap_or(false),
-                lat: record["lat"].as_str().and_then(|s| s.parse::<f64>().ok()),
-                lon: record["lon"].as_str().and_then(|s| s.parse::<f64>().ok()),
+                address: record.get("address").map(|s| s.trim().to_string()).unwrap_or_default(),
+                town: record.get("town").map(|s| s.trim().to_string()).unwrap_or_default(),
+                county: record.get("county").map(|s| s.trim().to_string()).unwrap_or_default(),
+                postcode: record.get("postcode").map(|s| s.trim().to_string()).unwrap_or_default(),
+                closed: record.get("closed").map(|s| s == "true").unwrap_or(false),
+                lat: record.get("lat").and_then(|s| s.parse::<f64>().ok()),
+                lon: record.get("lon").and_then(|s| s.parse::<f64>().ok()),
                 years,
             });
         }
@@ -101,4 +103,44 @@ pub fn parse_parquet(path: &str) -> Result<Vec<ImportPub>> {
     }
     
     Ok(pubs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_parse_json_basic() -> Result<()> {
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, r#"[
+            {{ "name": " The Anchor ", "address": " 1 High St ", "town": " Town ", "county": " County ", "postcode": " PC1 ", "closed": false, "years": [] }},
+            {{ "name": "", "address": "Hidden", "town": "Town", "county": "County", "postcode": "PC", "closed": true, "years": [] }}
+        ]"#)?;
+
+        let pubs = parse_json(file.path().to_str().unwrap())?;
+        assert_eq!(pubs.len(), 1);
+        assert_eq!(pubs[0].name, "The Anchor");
+        assert_eq!(pubs[0].address, "1 High St");
+        assert_eq!(pubs[0].town, "Town");
+        assert_eq!(pubs[0].county, "County");
+        assert_eq!(pubs[0].postcode, "PC1");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_csv_basic() -> Result<()> {
+        let mut file = NamedTempFile::new()?;
+        writeln!(file, "name,address,town,county,postcode,closed,years")?;
+        writeln!(file, "\" The Bell \",\" 2 Main St \",\" Town \",\" County \",\" PC2 \",false,\"2021;2022\"")?;
+        writeln!(file, "\"\",\"Hidden\",\"Town\",\"County\",\"PC\",true,\"\"")?;
+
+        let result = parse_csv(file.path().to_str().unwrap())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "The Bell");
+        assert_eq!(result[0].address, "2 Main St");
+        assert_eq!(result[0].years, vec![2021, 2022]);
+        Ok(())
+    }
 }
