@@ -22,7 +22,7 @@ pub fn MapView(
                 
                 // Initialize map if not already done
                 // We'll use a data attribute to keep track of the map instance
-                let has_map = container.has_attribute("data-map-initialized").unwrap_or(false);
+                let has_map = container.has_attribute("data-map-initialized");
                 
                 if !has_map {
                     let map_options = js_sys::Object::new();

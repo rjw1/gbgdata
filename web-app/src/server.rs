@@ -178,7 +178,6 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
 
     if let Some(_y) = year {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
-        param_idx += 1;
     }
 
     if open_only.unwrap_or(false) {
