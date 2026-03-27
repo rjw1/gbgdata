@@ -148,6 +148,8 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
+                  ST_Y(p.location::geometry) as lat,
+                  ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
                   s.current_streak
@@ -215,6 +217,8 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSu
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
+                  ST_Y(p.location::geometry) as lat,
+                  ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
                   s.current_streak
@@ -250,6 +254,8 @@ pub async fn get_ranked_pubs(sort: Option<SortMode>) -> Result<Vec<PubSummary>, 
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
+                  ST_Y(p.location::geometry) as lat,
+                  ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
                   s.current_streak
@@ -328,6 +334,8 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Optio
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters,
+                  ST_Y(p.location::geometry) as lat,
+                  ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
                   s.current_streak

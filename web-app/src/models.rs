@@ -12,6 +12,8 @@ pub struct PubSummary {
     pub postcode: String,
     pub closed: bool,
     pub distance_meters: Option<f64>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
     pub latest_year: Option<i32>,
     pub total_years_rank: Option<i64>,
     pub current_streak: Option<i32>,

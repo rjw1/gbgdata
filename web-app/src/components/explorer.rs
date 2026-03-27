@@ -4,6 +4,14 @@ use leptos_router::hooks::use_params_map;
 use crate::server::{get_regions, get_region_details, get_pubs_by_location, get_years, get_year_regions};
 use crate::models::{SortMode};
 use crate::components::sort::SortSelector;
+use crate::components::map::MapView;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum ViewMode {
+    #[default]
+    List,
+    Map,
+}
 
 #[component]
 pub fn ExportButtons(
@@ -247,6 +255,7 @@ pub fn LocationPubList() -> impl IntoView {
     let outcode = move || params.get().get("outcode").map(String::from);
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok());
     let (sort, set_sort) = signal(SortMode::default());
+    let (view_mode, set_view_mode) = signal(ViewMode::default());
 
     let pubs = Resource::new(
         move || (region(), town(), outcode(), year(), sort.get()),
@@ -258,6 +267,20 @@ pub fn LocationPubList() -> impl IntoView {
             <div class="explorer-header">
                 <Breadcrumbs region=Some(region()) town=town() outcode=outcode() year=year() />
                 <div class="header-controls">
+                    <div class="view-toggle">
+                        <button 
+                            class=move || format!("toggle-btn {}", if view_mode.get() == ViewMode::List { "active" } else { "" })
+                            on:click=move |_| set_view_mode.set(ViewMode::List)
+                        >
+                            "📋 List"
+                        </button>
+                        <button 
+                            class=move || format!("toggle-btn {}", if view_mode.get() == ViewMode::Map { "active" } else { "" })
+                            on:click=move |_| set_view_mode.set(ViewMode::Map)
+                        >
+                            "🗺️ Map"
+                        </button>
+                    </div>
                     <SortSelector 
                         sort=Signal::from(sort) 
                         on_change=Callback::new(move |mode| set_sort.set(mode)) 
@@ -279,47 +302,57 @@ pub fn LocationPubList() -> impl IntoView {
                 }}
             </h1>
 
-            <div class="pub-grid">
-                <Suspense fallback=|| view! { <p>"Loading pubs..."</p> }>
-                    {move || pubs.get().map(|res| match res {
-                        Ok(list) => list.into_iter().map(|p| {
-                            let id = p.id;
-                            let name = p.name.clone();
-                            let town_p = p.town.clone();
-                            let region_p = p.region.clone();
-                            let closed = p.closed;
-                            let total = p.total_years_rank.unwrap_or(0);
-                            let streak = p.current_streak.unwrap_or(0);
-                            let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
-                            
+            <Suspense fallback=|| view! { <p>"Loading pubs..."</p> }>
+                {move || pubs.get().map(|res| match res {
+                    Ok(list) => {
+                        if view_mode.get() == ViewMode::Map {
                             view! {
-                                <A href=format!("/pub/{}", id) attr:class="pub-card">
-                                    <h3>{name}</h3>
-                                    <p>{format!("{}, {}", town_p, region_p)}</p>
-                                    
-                                    <div class="card-stats">
-                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
-                                            <span class="count">{total}</span>
-                                            <span class="label">" entries"</span>
-                                        </div>
-                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::Streak { "highlight" } else { "" })>
-                                            <span class="count">{streak}</span>
-                                            <span class="label">" streak"</span>
-                                        </div>
-                                    </div>
+                                <MapView pubs=Signal::from(list) />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <div class="pub-grid">
+                                    {list.into_iter().map(|p| {
+                                        let id = p.id;
+                                        let name = p.name.clone();
+                                        let town_p = p.town.clone();
+                                        let region_p = p.region.clone();
+                                        let closed = p.closed;
+                                        let total = p.total_years_rank.unwrap_or(0);
+                                        let streak = p.current_streak.unwrap_or(0);
+                                        let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
+                                        
+                                        view! {
+                                            <A href=format!("/pub/{}", id) attr:class="pub-card">
+                                                <h3>{name}</h3>
+                                                <p>{format!("{}, {}", town_p, region_p)}</p>
+                                                
+                                                <div class="card-stats">
+                                                    <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
+                                                        <span class="count">{total}</span>
+                                                        <span class="label">" entries"</span>
+                                                    </div>
+                                                    <div class=format!("stat-badge {}", if sort.get() == SortMode::Streak { "highlight" } else { "" })>
+                                                        <span class="count">{streak}</span>
+                                                        <span class="label">" streak"</span>
+                                                    </div>
+                                                </div>
 
-                                    {if closed {
-                                        view! { <span class="badge closed">"Closed"</span> }.into_any()
-                                    } else {
-                                        view! { <span class="badge open">{year_text}</span> }.into_any()
-                                    }}
-                                </A>
-                            }
-                        }).collect_view().into_any(),
-                        Err(e) => view! { <p class="error">{e.to_string()}</p> }.into_any(),
-                    })}
-                </Suspense>
-            </div>
+                                                {if closed {
+                                                    view! { <span class="badge closed">"Closed"</span> }.into_any()
+                                                } else {
+                                                    view! { <span class="badge open">{year_text}</span> }.into_any()
+                                                }}
+                                            </A>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                            }.into_any()
+                        }
+                    },
+                    Err(e) => view! { <p class="error">{e.to_string()}</p> }.into_any(),
+                })}
+            </Suspense>
         </div>
     }
 }
