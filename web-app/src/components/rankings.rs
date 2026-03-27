@@ -7,20 +7,31 @@ use crate::components::sort::SortSelector;
 #[component]
 pub fn Rankings() -> impl IntoView {
     let (sort, set_sort) = signal(SortMode::TotalEntries); // Default to Total for Rankings
+    let (open_only, set_open_only) = signal(false);
 
     let pubs = Resource::new(
-        move || sort.get(), 
-        |s| async move { get_ranked_pubs(Some(s)).await }
+        move || (sort.get(), open_only.get()), 
+        |(s, open)| async move { get_ranked_pubs(Some(s), Some(open)).await }
     );
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
                 <h1>"All-Time GBG Rankings"</h1>
-                <SortSelector 
-                    sort=Signal::from(sort) 
-                    on_change=Callback::new(move |mode| set_sort.set(mode)) 
-                />
+                <div class="header-controls">
+                    <label class="open-only-toggle">
+                        <input 
+                            type="checkbox" 
+                            on:change=move |ev| set_open_only.set(event_target_checked(&ev))
+                            prop:checked=open_only
+                        />
+                        " Open only"
+                    </label>
+                    <SortSelector 
+                        sort=Signal::from(sort) 
+                        on_change=Callback::new(move |mode| set_sort.set(mode)) 
+                    />
+                </div>
             </div>
             <p class="years-range">"The most frequently featured pubs in Good Beer Guide history (Top 100)"</p>
 

@@ -133,7 +133,7 @@ pub async fn get_region_details(region: String, year: Option<i32>) -> Result<Reg
 }
 
 #[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -178,6 +178,11 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
 
     if let Some(_y) = year {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
+        param_idx += 1;
+    }
+
+    if open_only.unwrap_or(false) {
+        query.push_str(" AND p.closed = false");
     }
 
     query.push_str(&format!(" {}", get_order_by(sort, "p.name")));
@@ -201,12 +206,14 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
 }
 
 #[server(GetPubs, "/api")]
-pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs(query: String, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let open_filter = if open_only.unwrap_or(false) { "AND p.closed = false" } else { "" };
 
     let pubs = sqlx::query_as::<_, PubSummary>(
         &format!(
@@ -224,8 +231,10 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSu
                   s.current_streak
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1
+           WHERE (p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1)
+           {}
            {} LIMIT 50"#,
+            open_filter,
             get_order_by(sort, "p.name")
         )
     )
@@ -238,12 +247,14 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSu
 }
 
 #[server(GetRankedPubs, "/api")]
-pub async fn get_ranked_pubs(sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_ranked_pubs(sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let open_filter = if open_only.unwrap_or(false) { "WHERE p.closed = false" } else { "" };
 
     let pubs = sqlx::query_as::<_, PubSummary>(
         &format!(
@@ -261,7 +272,9 @@ pub async fn get_ranked_pubs(sort: Option<SortMode>) -> Result<Vec<PubSummary>, 
                   s.current_streak
            FROM pubs p
            JOIN pub_stats s ON p.id = s.pub_id
+           {}
            {} LIMIT 100"#,
+            open_filter,
             get_order_by(sort, "s.total_years DESC")
         )
     )
@@ -318,12 +331,14 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
 }
 
 #[server(GetNearbyPubs, "/api")]
-pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let open_filter = if open_only.unwrap_or(false) { "AND p.closed = false" } else { "" };
 
     let pubs = sqlx::query_as::<_, PubSummary>(
         &format!(
@@ -343,7 +358,9 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Optio
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.location IS NOT NULL 
              AND ST_DWithin(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+             {}
            {} LIMIT 50"#,
+            open_filter,
             get_order_by(sort, "distance_meters")
         )
     )

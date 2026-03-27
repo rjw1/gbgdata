@@ -17,12 +17,13 @@ pub fn NearMe() -> impl IntoView {
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(None::<String>);
     let (sort, set_sort) = signal(SortMode::Distance); // Default to Distance for Near Me
+    let (open_only, set_open_only) = signal(false);
 
     let pubs = Resource::new(
-        move || (lat_lon.get(), radius.get(), sort.get()),
-        |(coords, r, s)| async move {
+        move || (lat_lon.get(), radius.get(), sort.get(), open_only.get()),
+        |(coords, r, s, open)| async move {
             if let Some((lat, lon)) = coords {
-                get_nearby_pubs(lat, lon, r, Some(s)).await
+                get_nearby_pubs(lat, lon, r, Some(s), Some(open)).await
             } else {
                 Ok(Vec::new())
             }
@@ -129,6 +130,14 @@ pub fn NearMe() -> impl IntoView {
                 </div>
 
                 <div class="sort-row">
+                    <label class="open-only-toggle">
+                        <input 
+                            type="checkbox" 
+                            on:change=move |ev| set_open_only.set(event_target_checked(&ev))
+                            prop:checked=open_only
+                        />
+                        " Open only"
+                    </label>
                     <SortSelector 
                         sort=Signal::from(sort) 
                         on_change=Callback::new(move |mode| set_sort.set(mode)) 

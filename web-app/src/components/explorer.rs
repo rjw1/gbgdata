@@ -256,10 +256,11 @@ pub fn LocationPubList() -> impl IntoView {
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok());
     let (sort, set_sort) = signal(SortMode::default());
     let (view_mode, set_view_mode) = signal(ViewMode::default());
+    let (open_only, set_open_only) = signal(false);
 
     let pubs = Resource::new(
-        move || (region(), town(), outcode(), year(), sort.get()),
-        |(r, t, o, y, s)| async move { get_pubs_by_location(r, t, o, y, Some(s)).await }
+        move || (region(), town(), outcode(), year(), sort.get(), open_only.get()),
+        |(r, t, o, y, s, open)| async move { get_pubs_by_location(r, t, o, y, Some(s), Some(open)).await }
     );
 
     view! {
@@ -281,6 +282,14 @@ pub fn LocationPubList() -> impl IntoView {
                             "🗺️ Map"
                         </button>
                     </div>
+                    <label class="open-only-toggle">
+                        <input 
+                            type="checkbox" 
+                            on:change=move |ev| set_open_only.set(event_target_checked(&ev))
+                            prop:checked=open_only
+                        />
+                        " Open only"
+                    </label>
                     <SortSelector 
                         sort=Signal::from(sort) 
                         on_change=Callback::new(move |mode| set_sort.set(mode)) 

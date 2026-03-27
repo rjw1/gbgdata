@@ -8,10 +8,11 @@ use crate::components::sort::SortSelector;
 pub fn PubList() -> impl IntoView {
     let (query, set_query) = signal(String::new());
     let (sort, set_sort) = signal(SortMode::default());
+    let (open_only, set_open_only) = signal(false);
 
     let pubs = Resource::new(
-        move || (query.get(), sort.get()),
-        |(q, s)| async move { get_pubs(q, Some(s)).await }
+        move || (query.get(), sort.get(), open_only.get()),
+        |(q, s, open)| async move { get_pubs(q, Some(s), Some(open)).await }
     );
 
     view! {
@@ -26,6 +27,14 @@ pub fn PubList() -> impl IntoView {
                     }
                     prop:value=query
                 />
+                <label class="open-only-toggle">
+                    <input 
+                        type="checkbox" 
+                        on:change=move |ev| set_open_only.set(event_target_checked(&ev))
+                        prop:checked=open_only
+                    />
+                    " Open only"
+                </label>
                 <SortSelector 
                     sort=Signal::from(sort) 
                     on_change=Callback::new(move |mode| set_sort.set(mode)) 
