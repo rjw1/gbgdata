@@ -7,7 +7,8 @@ pub struct PubSummary {
     pub id: Uuid,
     pub name: String,
     pub town: String,
-    pub county: String,
+    pub region: String,
+    pub country_code: Option<String>,
     pub postcode: String,
     pub closed: bool,
     pub distance_meters: Option<f64>,
@@ -32,7 +33,8 @@ pub struct PubDetail {
     pub name: String,
     pub address: String,
     pub town: String,
-    pub county: String,
+    pub region: String,
+    pub country_code: Option<String>,
     pub postcode: String,
     pub closed: bool,
     pub untappd_id: Option<String>,
@@ -52,7 +54,7 @@ pub struct PubDetail {
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CountySummary {
+pub struct RegionSummary {
     pub name: String,
     pub pub_count: i64,
 }
@@ -79,7 +81,7 @@ pub struct YearSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CountyDetails {
+pub struct RegionDetails {
     pub name: String,
     pub towns: Vec<TownSummary>,
     pub outcodes: Vec<OutcodeSummary>,

@@ -19,7 +19,7 @@ pub fn PubList() -> impl IntoView {
             <div class="list-controls">
                 <input
                     type="text"
-                    placeholder="Search pubs, towns, or counties..."
+                    placeholder="Search pubs, towns, or regions..."
                     class="search-input"
                     on:input=move |ev| {
                         set_query.set(event_target_value(&ev));
@@ -39,7 +39,7 @@ pub fn PubList() -> impl IntoView {
                             let id = p.id;
                             let name = p.name.clone();
                             let town = p.town.clone();
-                            let county = p.county.clone();
+                            let region = p.region.clone();
                             let closed = p.closed;
                             let total = p.total_years_rank.unwrap_or(0);
                             let streak = p.current_streak.unwrap_or(0);
@@ -48,7 +48,7 @@ pub fn PubList() -> impl IntoView {
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
-                                    <p>{format!("{}, {}", town, county)}</p>
+                                    <p>{format!("{}, {}", town, region)}</p>
                                     
                                     <div class="card-stats">
                                         <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>

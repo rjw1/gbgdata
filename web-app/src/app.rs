@@ -1,7 +1,7 @@
 use crate::components::pub_list::PubList;
 use crate::components::pub_detail::PubDetail;
 use crate::components::near_me::NearMe;
-use crate::components::explorer::{ExplorerHome, CountyDashboard, LocationPubList, YearDashboard};
+use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList, YearDashboard};
 use crate::components::rankings::Rankings;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
@@ -113,14 +113,14 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/pub/:id") view=PubDetail/>
                     
                     <Route path=path!("/explore") view=ExplorerHome/>
-                    <Route path=path!("/explore/:county") view=CountyDashboard/>
-                    <Route path=path!("/explore/:county/town/:town") view=LocationPubList/>
-                    <Route path=path!("/explore/:county/outcode/:outcode") view=LocationPubList/>
+                    <Route path=path!("/explore/:region") view=RegionDashboard/>
+                    <Route path=path!("/explore/:region/town/:town") view=LocationPubList/>
+                    <Route path=path!("/explore/:region/outcode/:outcode") view=LocationPubList/>
 
                     <Route path=path!("/explore/year/:year") view=YearDashboard/>
-                    <Route path=path!("/explore/year/:year/:county") view=CountyDashboard/>
-                    <Route path=path!("/explore/year/:year/:county/town/:town") view=LocationPubList/>
-                    <Route path=path!("/explore/year/:year/:county/outcode/:outcode") view=LocationPubList/>
+                    <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
+                    <Route path=path!("/explore/year/:year/:region/town/:town") view=LocationPubList/>
+                    <Route path=path!("/explore/year/:year/:region/outcode/:outcode") view=LocationPubList/>
                 </Routes>
                 <footer>
                     <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>

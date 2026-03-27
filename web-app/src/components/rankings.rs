@@ -31,7 +31,7 @@ pub fn Rankings() -> impl IntoView {
                             let id = p.id;
                             let name = p.name.clone();
                             let town = p.town.clone();
-                            let county = p.county.clone();
+                            let region = p.region.clone();
                             let total = p.total_years_rank.unwrap_or(0);
                             let streak = p.current_streak.unwrap_or(0);
                             let closed = p.closed;
@@ -41,7 +41,7 @@ pub fn Rankings() -> impl IntoView {
                                     <div class="ranking-number">{format!("#{}", idx + 1)}</div>
                                     <div class="ranking-content">
                                         <h3>{name}</h3>
-                                        <p>{format!("{}, {}", town, county)}</p>
+                                        <p>{format!("{}, {}", town, region)}</p>
                                         
                                         <div class="card-stats">
                                             <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>

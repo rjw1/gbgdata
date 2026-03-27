@@ -1,0 +1,17 @@
+- write some docs on usage and hosting
+- write some ADRs
+- write a test suite
+- remove generated artifacts from git repo
+  - data sources
+  - things that rust is using to compile and generate
+- make the use of nominatim on a hosted website optional
+- on display dont use county use region
+- import country data as well
+  - first column contains a code for country.
+- write stuff so it can all be hosted as an app on TrueNAS
+- allow a map view of all results on an explore page
+- add a toggle to only show open pubs
+- allow people to see all pubs in a region as list without having to go down to town or outcode
+- when showing streak and years ingore if the pub has an entry in 1972.
+- add an about page
+  - mention that 1972 was a trial run of the GBG so while the data is here its not used for appearances in the GBG.

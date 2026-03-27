@@ -25,7 +25,7 @@ pub mod ssr_export {
 
     #[derive(Deserialize)]
     pub struct ExportFilter {
-        pub county: Option<String>,
+        pub region: Option<String>,
         pub town: Option<String>,
         pub outcode: Option<String>,
         pub year: Option<i32>,
@@ -35,7 +35,7 @@ pub mod ssr_export {
         pub fn get_filename(&self, ext: &str) -> String {
             let mut parts = vec!["gbg-pubs".to_string()];
             if let Some(y) = self.year { parts.push(y.to_string()); }
-            if let Some(ref c) = self.county { parts.push(c.replace(" ", "_")); }
+            if let Some(ref r) = self.region { parts.push(r.replace(" ", "_")); }
             if let Some(ref t) = self.town { parts.push(t.replace(" ", "_")); }
             if let Some(ref o) = self.outcode { parts.push(o.replace(" ", "_")); }
             format!("{}.{}", parts.join("-"), ext)
@@ -47,7 +47,7 @@ pub mod ssr_export {
             r#"SELECT p.id, p.name, 
                       COALESCE(p.address, '') as address, 
                       COALESCE(p.town, '') as town, 
-                      COALESCE(p.county, '') as county, 
+                      COALESCE(p.region, '') as region, 
                       COALESCE(p.postcode, '') as postcode, 
                       COALESCE(p.closed, false) as closed,
                       p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
@@ -70,8 +70,8 @@ pub mod ssr_export {
 
         query.push_str(" WHERE 1=1");
 
-        if let Some(ref c) = filter.county {
-            query.push_str(&format!(" AND p.county = '{}'", c.replace("'", "''")));
+        if let Some(ref r) = filter.region {
+            query.push_str(&format!(" AND p.region = '{}'", r.replace("'", "''")));
         }
         if let Some(ref t) = filter.town {
             query.push_str(&format!(" AND p.town = '{}'", t.replace("'", "''")));
@@ -95,7 +95,8 @@ pub mod ssr_export {
                 name: row.get("name"),
                 address: row.get("address"),
                 town: row.get("town"),
-                county: row.get("county"),
+                region: row.get("region"),
+                country_code: None, // Add country_code if needed later
                 postcode: row.get("postcode"),
                 closed: row.get("closed"),
                 untappd_id: row.get("untappd_id"),
@@ -147,7 +148,7 @@ pub mod ssr_export {
                     .from_writer(Vec::new());
                 
                 let _ = wtr.write_record(&[
-                    "id", "name", "address", "town", "county", "postcode", "closed",
+                    "id", "name", "address", "town", "region", "postcode", "closed",
                     "untappd_id", "google_maps_id", "whatpub_id", "rgl_id",
                     "lat", "lon", "current_streak", "last_5_years", "last_10_years",
                     "total_years", "first_year", "latest_year", "years"
@@ -160,7 +161,7 @@ pub mod ssr_export {
                         p.name,
                         p.address,
                         p.town,
-                        p.county,
+                        p.region,
                         p.postcode,
                         p.closed.to_string(),
                         p.untappd_id.unwrap_or_default(),
@@ -210,7 +211,7 @@ pub mod ssr_export {
                     Field::new("name", DataType::Utf8, false),
                     Field::new("address", DataType::Utf8, false),
                     Field::new("town", DataType::Utf8, false),
-                    Field::new("county", DataType::Utf8, false),
+                    Field::new("region", DataType::Utf8, false),
                     Field::new("postcode", DataType::Utf8, false),
                     Field::new("closed", DataType::Boolean, false),
                     Field::new("lat", DataType::Float64, true),
@@ -223,7 +224,7 @@ pub mod ssr_export {
                 let name_array = StringArray::from(data.iter().map(|p| p.name.clone()).collect::<Vec<String>>());
                 let addr_array = StringArray::from(data.iter().map(|p| p.address.clone()).collect::<Vec<String>>());
                 let town_array = StringArray::from(data.iter().map(|p| p.town.clone()).collect::<Vec<String>>());
-                let county_array = StringArray::from(data.iter().map(|p| p.county.clone()).collect::<Vec<String>>());
+                let region_array = StringArray::from(data.iter().map(|p| p.region.clone()).collect::<Vec<String>>());
                 let post_array = StringArray::from(data.iter().map(|p| p.postcode.clone()).collect::<Vec<String>>());
                 let closed_array = BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<bool>>());
                 let lat_array = Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<Option<f64>>>());
@@ -236,7 +237,7 @@ pub mod ssr_export {
                     Arc::new(name_array),
                     Arc::new(addr_array),
                     Arc::new(town_array),
-                    Arc::new(county_array),
+                    Arc::new(region_array),
                     Arc::new(post_array),
                     Arc::new(closed_array),
                     Arc::new(lat_array),

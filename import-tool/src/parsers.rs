@@ -29,7 +29,8 @@ pub fn parse_csv(path: &str) -> Result<Vec<ImportPub>> {
                 name,
                 address: record.get("address").map(|s| s.trim().to_string()).unwrap_or_default(),
                 town: record.get("town").map(|s| s.trim().to_string()).unwrap_or_default(),
-                county: record.get("county").map(|s| s.trim().to_string()).unwrap_or_default(),
+                region: record.get("region").or(record.get("county")).map(|s| s.trim().to_string()).unwrap_or_default(),
+                country_code: record.get("country_code").map(|s| s.trim().to_string()).unwrap_or_default(),
                 postcode: record.get("postcode").map(|s| s.trim().to_string()).unwrap_or_default(),
                 closed: record.get("closed").map(|s| s == "true").unwrap_or(false),
                 lat: record.get("lat").and_then(|s| s.parse::<f64>().ok()),
@@ -54,7 +55,7 @@ pub fn parse_json(path: &str) -> Result<Vec<ImportPub>> {
         } else {
             p.address = p.address.trim().to_string();
             p.town = p.town.trim().to_string();
-            p.county = p.county.trim().to_string();
+            p.region = p.region.trim().to_string();
             p.postcode = p.postcode.trim().to_string();
             Some(p)
         }
@@ -77,7 +78,7 @@ pub fn parse_parquet(path: &str) -> Result<Vec<ImportPub>> {
         let name_col = batch.column(1).as_any().downcast_ref::<StringArray>().context("Missing name col")?;
         let addr_col = batch.column(2).as_any().downcast_ref::<StringArray>().context("Missing address col")?;
         let town_col = batch.column(3).as_any().downcast_ref::<StringArray>().context("Missing town col")?;
-        let county_col = batch.column(4).as_any().downcast_ref::<StringArray>().context("Missing county col")?;
+        let region_col = batch.column(4).as_any().downcast_ref::<StringArray>().context("Missing region (formerly county) col")?;
         let postcode_col = batch.column(5).as_any().downcast_ref::<StringArray>().context("Missing postcode col")?;
         let closed_col = batch.column(6).as_any().downcast_ref::<BooleanArray>().context("Missing closed col")?;
         let lat_col = batch.column(7).as_any().downcast_ref::<Float64Array>().context("Missing lat col")?;
@@ -91,7 +92,8 @@ pub fn parse_parquet(path: &str) -> Result<Vec<ImportPub>> {
                     name,
                     address: addr_col.value(i).trim().to_string(),
                     town: town_col.value(i).trim().to_string(),
-                    county: county_col.value(i).trim().to_string(),
+                    region: region_col.value(i).trim().to_string(),
+                    country_code: String::new(), // Default for now
                     postcode: postcode_col.value(i).trim().to_string(),
                     closed: closed_col.value(i),
                     lat: if lat_col.is_null(i) { None } else { Some(lat_col.value(i)) },
@@ -115,8 +117,8 @@ mod tests {
     fn test_parse_json_basic() -> Result<()> {
         let mut file = NamedTempFile::new()?;
         writeln!(file, r#"[
-            {{ "name": " The Anchor ", "address": " 1 High St ", "town": " Town ", "county": " County ", "postcode": " PC1 ", "closed": false, "years": [] }},
-            {{ "name": "", "address": "Hidden", "town": "Town", "county": "County", "postcode": "PC", "closed": true, "years": [] }}
+            {{ "name": " The Anchor ", "address": " 1 High St ", "town": " Town ", "region": " Region ", "country_code": "E", "postcode": " PC1 ", "closed": false, "years": [] }},
+            {{ "name": "", "address": "Hidden", "town": "Town", "region": "Region", "postcode": "PC", "closed": true, "years": [] }}
         ]"#)?;
 
         let pubs = parse_json(file.path().to_str().unwrap())?;
@@ -124,7 +126,8 @@ mod tests {
         assert_eq!(pubs[0].name, "The Anchor");
         assert_eq!(pubs[0].address, "1 High St");
         assert_eq!(pubs[0].town, "Town");
-        assert_eq!(pubs[0].county, "County");
+        assert_eq!(pubs[0].region, "Region");
+        assert_eq!(pubs[0].country_code, "E");
         assert_eq!(pubs[0].postcode, "PC1");
         Ok(())
     }
@@ -132,14 +135,16 @@ mod tests {
     #[test]
     fn test_parse_csv_basic() -> Result<()> {
         let mut file = NamedTempFile::new()?;
-        writeln!(file, "name,address,town,county,postcode,closed,years")?;
-        writeln!(file, "\" The Bell \",\" 2 Main St \",\" Town \",\" County \",\" PC2 \",false,\"2021;2022\"")?;
-        writeln!(file, "\"\",\"Hidden\",\"Town\",\"County\",\"PC\",true,\"\"")?;
+        writeln!(file, "name,address,town,region,country_code,postcode,closed,years")?;
+        writeln!(file, "\" The Bell \",\" 2 Main St \",\" Town \",\" Region \",\"W\",\" PC2 \",false,\"2021;2022\"")?;
+        writeln!(file, "\"\",\"Hidden\",\"Town\",\"Region\",\"\",\"PC\",true,\"\"")?;
 
         let result = parse_csv(file.path().to_str().unwrap())?;
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "The Bell");
         assert_eq!(result[0].address, "2 Main St");
+        assert_eq!(result[0].region, "Region");
+        assert_eq!(result[0].country_code, "W");
         assert_eq!(result[0].years, vec![2021, 2022]);
         Ok(())
     }

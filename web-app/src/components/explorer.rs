@@ -1,19 +1,19 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
-use crate::server::{get_counties, get_county_details, get_pubs_by_location, get_years, get_year_counties};
+use crate::server::{get_regions, get_region_details, get_pubs_by_location, get_years, get_year_regions};
 use crate::models::{SortMode};
 use crate::components::sort::SortSelector;
 
 #[component]
 pub fn ExportButtons(
-    #[prop(into)] county: Option<String>,
+    #[prop(into)] region: Option<String>,
     #[prop(into)] town: Option<String>,
     #[prop(into)] outcode: Option<String>,
     #[prop(into)] year: Option<i32>,
 ) -> impl IntoView {
     let mut query_params = Vec::new();
-    if let Some(ref c) = county { query_params.push(format!("county={}", c)); }
+    if let Some(ref r) = region { query_params.push(format!("region={}", r)); }
     if let Some(ref t) = town { query_params.push(format!("town={}", t)); }
     if let Some(ref o) = outcode { query_params.push(format!("outcode={}", o)); }
     if let Some(y) = year { query_params.push(format!("year={}", y)); }
@@ -26,7 +26,7 @@ pub fn ExportButtons(
 
     let mut name_parts = vec!["gbg-pubs".to_string()];
     if let Some(y) = year { name_parts.push(y.to_string()); }
-    if let Some(ref c) = county { name_parts.push(c.replace(" ", "_")); }
+    if let Some(ref r) = region { name_parts.push(r.replace(" ", "_")); }
     if let Some(ref t) = town { name_parts.push(t.replace(" ", "_")); }
     if let Some(ref o) = outcode { name_parts.push(o.replace(" ", "_")); }
     let base_name = name_parts.join("-");
@@ -45,7 +45,7 @@ pub fn ExportButtons(
 
 #[component]
 pub fn Breadcrumbs(
-    #[prop(into)] county: Option<String>,
+    #[prop(into)] region: Option<String>,
     #[prop(into)] town: Option<String>,
     #[prop(into)] outcode: Option<String>,
     #[prop(into)] year: Option<i32>,
@@ -58,9 +58,9 @@ pub fn Breadcrumbs(
             {move || year.map(|y| view! { 
                 " > " <A href=format!("/explore/year/{}", y)>{y}</A> 
             })}
-            {move || county.clone().map(|c| {
-                let url = if let Some(y) = year { format!("/explore/year/{}/{}", y, c) } else { format!("/explore/{}", c) };
-                view! { " > " <A href=url>{c}</A> }
+            {move || region.clone().map(|r| {
+                let url = if let Some(y) = year { format!("/explore/year/{}/{}", y, r) } else { format!("/explore/{}", r) };
+                view! { " > " <A href=url>{r}</A> }
             })}
             {move || town.clone().map(|t| view! { " > " {t} })}
             {move || outcode.clone().map(|o| view! { " > " {o} })}
@@ -70,14 +70,14 @@ pub fn Breadcrumbs(
 
 #[component]
 pub fn ExplorerHome() -> impl IntoView {
-    let counties = Resource::new(|| (), |_| async move { get_counties().await });
+    let regions = Resource::new(|| (), |_| async move { get_regions().await });
     let years = Resource::new(|| (), |_| async move { get_years().await });
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
-                <Breadcrumbs county=None town=None outcode=None year=None />
-                <ExportButtons county=None town=None outcode=None year=None />
+                <Breadcrumbs region=None town=None outcode=None year=None />
+                <ExportButtons region=None town=None outcode=None year=None />
             </div>
             
             <section>
@@ -103,17 +103,17 @@ pub fn ExplorerHome() -> impl IntoView {
             </section>
 
             <section>
-                <h1>"Browse by County"</h1>
-                <Suspense fallback=|| view! { <p>"Loading counties..."</p> }>
-                    {move || counties.get().map(|res| match res {
+                <h1>"Browse by Region"</h1>
+                <Suspense fallback=|| view! { <p>"Loading regions..."</p> }>
+                    {move || regions.get().map(|res| match res {
                         Ok(list) => view! {
                             <div class="category-grid">
-                                {list.into_iter().map(|c| {
-                                    let name = c.name.clone();
+                                {list.into_iter().map(|r| {
+                                    let name = r.name.clone();
                                     view! {
                                         <A href=format!("/explore/{}", name) attr:class="category-card">
                                             <h3>{name}</h3>
-                                            <p>{c.pub_count}</p>
+                                            <p>{r.pub_count}</p>
                                         </A>
                                     }
                                 }).collect_view()}
@@ -132,29 +132,29 @@ pub fn YearDashboard() -> impl IntoView {
     let params = use_params_map();
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok()).unwrap_or(2026);
     
-    let counties = Resource::new(
+    let regions = Resource::new(
         move || year(),
-        |y| async move { get_year_counties(y).await }
+        |y| async move { get_year_regions(y).await }
     );
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
-                <Breadcrumbs county=None town=None outcode=None year=Some(year()) />
-                <ExportButtons county=None town=None outcode=None year=Some(year()) />
+                <Breadcrumbs region=None town=None outcode=None year=Some(year()) />
+                <ExportButtons region=None town=None outcode=None year=Some(year()) />
             </div>
-            <h1>{move || format!("GBG {} Counties", year())}</h1>
-            <Suspense fallback=|| view! { <p>"Loading counties..."</p> }>
-                {move || counties.get().map(|res| match res {
+            <h1>{move || format!("GBG {} Regions", year())}</h1>
+            <Suspense fallback=|| view! { <p>"Loading regions..."</p> }>
+                {move || regions.get().map(|res| match res {
                     Ok(list) => view! {
                         <div class="category-grid">
-                            {list.into_iter().map(|c| {
-                                let name = c.name.clone();
+                            {list.into_iter().map(|r| {
+                                let name = r.name.clone();
                                 let y = year();
                                 view! {
                                     <A href=format!("/explore/year/{}/{}", y, name) attr:class="category-card">
                                         <h3>{name}</h3>
-                                        <p>{c.pub_count}</p>
+                                        <p>{r.pub_count}</p>
                                     </A>
                                 }
                             }).collect_view()}
@@ -168,23 +168,23 @@ pub fn YearDashboard() -> impl IntoView {
 }
 
 #[component]
-pub fn CountyDashboard() -> impl IntoView {
+pub fn RegionDashboard() -> impl IntoView {
     let params = use_params_map();
-    let county = move || params.get().get("county").map(String::from).unwrap_or_default();
+    let region = move || params.get().get("region").map(String::from).unwrap_or_default();
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok());
     
     let details = Resource::new(
-        move || (county(), year()),
-        |(c, y)| async move { get_county_details(c, y).await }
+        move || (region(), year()),
+        |(r, y)| async move { get_region_details(r, y).await }
     );
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
-                <Breadcrumbs county=Some(county()) town=None outcode=None year=year() />
-                <ExportButtons county=Some(county()) town=None outcode=None year=year() />
+                <Breadcrumbs region=Some(region()) town=None outcode=None year=year() />
+                <ExportButtons region=Some(region()) town=None outcode=None year=year() />
             </div>
-            <Suspense fallback=|| view! { <p>"Loading county details..."</p> }>
+            <Suspense fallback=|| view! { <p>"Loading region details..."</p> }>
                 {move || details.get().map(|res| match res {
                     Ok(d) => {
                         let name_title = d.name.clone();
@@ -200,9 +200,9 @@ pub fn CountyDashboard() -> impl IntoView {
                                 <div class="category-grid small">
                                     {d.towns.into_iter().map(|t| {
                                         let t_name = t.name.clone();
-                                        let c_name = d.name.clone();
-                                        let url = if let Some(y) = y_opt { format!("/explore/year/{}/{}/town/{}", y, c_name, t_name) }
-                                                 else { format!("/explore/{}/town/{}", c_name, t_name) };
+                                        let r_name = d.name.clone();
+                                        let url = if let Some(y) = y_opt { format!("/explore/year/{}/{}/town/{}", y, r_name, t_name) }
+                                                 else { format!("/explore/{}/town/{}", r_name, t_name) };
                                         view! {
                                             <A href=url attr:class="category-card">
                                                 <h4>{t_name}</h4>
@@ -218,9 +218,9 @@ pub fn CountyDashboard() -> impl IntoView {
                                 <div class="category-grid small">
                                     {d.outcodes.into_iter().map(|o| {
                                         let o_name = o.name.clone();
-                                        let c_name = d.name.clone();
-                                        let url = if let Some(y) = y_opt { format!("/explore/year/{}/{}/outcode/{}", y, c_name, o_name) }
-                                                 else { format!("/explore/{}/outcode/{}", c_name, o_name) };
+                                        let r_name = d.name.clone();
+                                        let url = if let Some(y) = y_opt { format!("/explore/year/{}/{}/outcode/{}", y, r_name, o_name) }
+                                                 else { format!("/explore/{}/outcode/{}", r_name, o_name) };
                                         view! {
                                             <A href=url attr:class="category-card">
                                                 <h4>{o_name}</h4>
@@ -242,34 +242,34 @@ pub fn CountyDashboard() -> impl IntoView {
 #[component]
 pub fn LocationPubList() -> impl IntoView {
     let params = use_params_map();
-    let county = move || params.get().get("county").map(String::from).unwrap_or_default();
+    let region = move || params.get().get("region").map(String::from).unwrap_or_default();
     let town = move || params.get().get("town").map(String::from);
     let outcode = move || params.get().get("outcode").map(String::from);
     let year = move || params.get().get("year").and_then(|y| y.parse::<i32>().ok());
     let (sort, set_sort) = signal(SortMode::default());
 
     let pubs = Resource::new(
-        move || (county(), town(), outcode(), year(), sort.get()),
-        |(c, t, o, y, s)| async move { get_pubs_by_location(c, t, o, y, Some(s)).await }
+        move || (region(), town(), outcode(), year(), sort.get()),
+        |(r, t, o, y, s)| async move { get_pubs_by_location(r, t, o, y, Some(s)).await }
     );
 
     view! {
         <div class="explorer-container">
             <div class="explorer-header">
-                <Breadcrumbs county=Some(county()) town=town() outcode=outcode() year=year() />
+                <Breadcrumbs region=Some(region()) town=town() outcode=outcode() year=year() />
                 <div class="header-controls">
                     <SortSelector 
                         sort=Signal::from(sort) 
                         on_change=Callback::new(move |mode| set_sort.set(mode)) 
                     />
-                    <ExportButtons county=Some(county()) town=town() outcode=outcode() year=year() />
+                    <ExportButtons region=Some(region()) town=town() outcode=outcode() year=year() />
                 </div>
             </div>
             <h1>
                 {move || {
                     let loc = if let Some(t) = town() { format!("in {}", t) } 
                              else if let Some(o) = outcode() { format!("in {}", o) }
-                             else { format!("in {}", county()) };
+                             else { format!("in {}", region()) };
                     
                     if let Some(y) = year() {
                         format!("GBG {} Pubs {}", y, loc)
@@ -286,7 +286,7 @@ pub fn LocationPubList() -> impl IntoView {
                             let id = p.id;
                             let name = p.name.clone();
                             let town_p = p.town.clone();
-                            let county_p = p.county.clone();
+                            let region_p = p.region.clone();
                             let closed = p.closed;
                             let total = p.total_years_rank.unwrap_or(0);
                             let streak = p.current_streak.unwrap_or(0);
@@ -295,7 +295,7 @@ pub fn LocationPubList() -> impl IntoView {
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
-                                    <p>{format!("{}, {}", town_p, county_p)}</p>
+                                    <p>{format!("{}, {}", town_p, region_p)}</p>
                                     
                                     <div class="card-stats">
                                         <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>

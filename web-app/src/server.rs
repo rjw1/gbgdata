@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, CountySummary, CountyDetails, TownSummary, OutcodeSummary, YearSummary, SortMode};
+use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, TownSummary, OutcodeSummary, YearSummary, SortMode};
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
@@ -33,54 +33,54 @@ pub async fn get_years() -> Result<Vec<YearSummary>, ServerFnError> {
     Ok(years)
 }
 
-#[server(GetYearCounties, "/api")]
-pub async fn get_year_counties(year: i32) -> Result<Vec<CountySummary>, ServerFnError> {
+#[server(GetYearRegions, "/api")]
+pub async fn get_year_regions(year: i32) -> Result<Vec<RegionSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let counties = sqlx::query_as::<_, CountySummary>(
-        r#"SELECT p.county as "name", COUNT(*) as "pub_count"
+    let regions = sqlx::query_as::<_, RegionSummary>(
+        r#"SELECT p.region as "name", COUNT(*) as "pub_count"
            FROM pubs p
            JOIN gbg_history h ON p.id = h.pub_id
-           WHERE h.year = $1 AND p.county IS NOT NULL AND p.county != ''
-           GROUP BY p.county 
-           ORDER BY p.county"#
+           WHERE h.year = $1 AND p.region IS NOT NULL AND p.region != ''
+           GROUP BY p.region 
+           ORDER BY p.region"#
     )
     .bind(year)
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(counties)
+    Ok(regions)
 }
 
-#[server(GetCounties, "/api")]
-pub async fn get_counties() -> Result<Vec<CountySummary>, ServerFnError> {
+#[server(GetRegions, "/api")]
+pub async fn get_regions() -> Result<Vec<RegionSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let counties = sqlx::query_as::<_, CountySummary>(
-        r#"SELECT county as "name", COUNT(*) as "pub_count"
+    let regions = sqlx::query_as::<_, RegionSummary>(
+        r#"SELECT region as "name", COUNT(*) as "pub_count"
            FROM pubs 
-           WHERE county IS NOT NULL AND county != ''
-           GROUP BY county 
-           ORDER BY county"#
+           WHERE region IS NOT NULL AND region != ''
+           GROUP BY region 
+           ORDER BY region"#
     )
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(counties)
+    Ok(regions)
 }
 
-#[server(GetCountyDetails, "/api")]
-pub async fn get_county_details(county: String, year: Option<i32>) -> Result<CountyDetails, ServerFnError> {
+#[server(GetRegionDetails, "/api")]
+pub async fn get_region_details(region: String, year: Option<i32>) -> Result<RegionDetails, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -91,18 +91,18 @@ pub async fn get_county_details(county: String, year: Option<i32>) -> Result<Cou
         r#"SELECT town as "name", COUNT(*) as "pub_count"
            FROM pubs p
            JOIN gbg_history h ON p.id = h.pub_id
-           WHERE p.county = $1 AND h.year = $2 AND town IS NOT NULL AND town != ''
+           WHERE p.region = $1 AND h.year = $2 AND town IS NOT NULL AND town != ''
            GROUP BY town 
            ORDER BY town"#
     } else {
         r#"SELECT town as "name", COUNT(*) as "pub_count"
            FROM pubs 
-           WHERE county = $1 AND town IS NOT NULL AND town != ''
+           WHERE region = $1 AND town IS NOT NULL AND town != ''
            GROUP BY town 
            ORDER BY town"#
     };
 
-    let mut towns_q = sqlx::query_as::<_, TownSummary>(towns_query).bind(&county);
+    let mut towns_q = sqlx::query_as::<_, TownSummary>(towns_query).bind(&region);
     if let Some(y) = year { towns_q = towns_q.bind(y); }
     let towns = towns_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -110,30 +110,30 @@ pub async fn get_county_details(county: String, year: Option<i32>) -> Result<Cou
         r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name", COUNT(*) as "pub_count"
            FROM pubs p
            JOIN gbg_history h ON p.id = h.pub_id
-           WHERE p.county = $1 AND h.year = $2 AND postcode IS NOT NULL AND postcode != ''
+           WHERE p.region = $1 AND h.year = $2 AND postcode IS NOT NULL AND postcode != ''
            GROUP BY 1
            ORDER BY 1"#
     } else {
         r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name", COUNT(*) as "pub_count"
            FROM pubs 
-           WHERE county = $1 AND postcode IS NOT NULL AND postcode != ''
+           WHERE region = $1 AND postcode IS NOT NULL AND postcode != ''
            GROUP BY 1
            ORDER BY 1"#
     };
 
-    let mut outcodes_q = sqlx::query_as::<_, OutcodeSummary>(outcodes_query).bind(&county);
+    let mut outcodes_q = sqlx::query_as::<_, OutcodeSummary>(outcodes_query).bind(&region);
     if let Some(y) = year { outcodes_q = outcodes_q.bind(y); }
     let outcodes = outcodes_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(CountyDetails {
-        name: county,
+    Ok(RegionDetails {
+        name: region,
         towns,
         outcodes,
     })
 }
 
 #[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
+pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     
@@ -143,7 +143,8 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
     let mut query = String::from(
         r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
-                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
@@ -158,9 +159,9 @@ pub async fn get_pubs_by_location(county: String, town: Option<String>, outcode:
         query.push_str(" JOIN gbg_history h ON p.id = h.pub_id");
     }
 
-    query.push_str(" WHERE p.county = $1");
+    query.push_str(" WHERE p.region = $1");
 
-    let mut binds: Vec<String> = vec![county];
+    let mut binds: Vec<String> = vec![region];
     let mut param_idx = 2;
 
     if let Some(t) = town {
@@ -209,7 +210,8 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSu
         &format!(
             r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
-                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
@@ -218,7 +220,7 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>) -> Result<Vec<PubSu
                   s.current_streak
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.county ILIKE $1
+           WHERE p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1
            {} LIMIT 50"#,
             get_order_by(sort, "p.name")
         )
@@ -243,7 +245,8 @@ pub async fn get_ranked_pubs(sort: Option<SortMode>) -> Result<Vec<PubSummary>, 
         &format!(
             r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
-                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   NULL::float8 as distance_meters,
@@ -320,7 +323,8 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Optio
         &format!(
             r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
-                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters,
@@ -357,7 +361,8 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         r#"SELECT p.id, p.name, 
                   COALESCE(p.address, '') as address, 
                   COALESCE(p.town, '') as town, 
-                  COALESCE(p.county, '') as county, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
                   COALESCE(p.postcode, '') as postcode, 
                   COALESCE(p.closed, false) as closed,
                   p.untappd_id, p.google_maps_id, p.whatpub_id, p.rgl_id,
@@ -391,7 +396,8 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         name: row.get("name"),
         address: row.get("address"),
         town: row.get("town"),
-        county: row.get("county"),
+        region: row.get("region"),
+        country_code: row.get("country_code"),
         postcode: row.get("postcode"),
         closed: row.get("closed"),
         untappd_id: row.get("untappd_id"),

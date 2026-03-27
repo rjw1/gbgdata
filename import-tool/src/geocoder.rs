@@ -29,11 +29,11 @@ impl Geocoder {
         Self { client, url, is_local }
     }
 
-    pub async fn geocode(&self, name: &str, _address: &str, town: &str, postcode: &str, county: &str) -> Result<Option<(f64, f64)>> {
+    pub async fn geocode(&self, name: &str, _address: &str, town: &str, postcode: &str, region: &str) -> Result<Option<(f64, f64)>> {
         // Fallback strategies in order of reliability
         let queries = vec![
             format!("{}, {}", name, town),
-            format!("{}, {}, {}", name, town, county),
+            format!("{}, {}, {}", name, town, region),
             format!("{}, {}", name, postcode),
             format!("{}, {}, {}", name, town, postcode),
             format!("{}", postcode), // Final hail mary: just the postcode

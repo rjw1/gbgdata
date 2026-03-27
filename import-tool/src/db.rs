@@ -7,17 +7,18 @@ pub async fn insert_pub(pool: &PgPool, pub_data: &ImportPub) -> Result<Uuid> {
     let pub_id: Uuid = if let Some(existing_id) = pub_data.id {
         sqlx::query_scalar!(
             r#"UPDATE pubs SET 
-                  name = $1, address = $2, town = $3, county = $4, postcode = $5, 
-                  closed = $6, 
-                  location = CASE WHEN $7::float8 IS NOT NULL AND $8::float8 IS NOT NULL 
-                             THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography 
+                  name = $1, address = $2, town = $3, region = $4, country_code = $5, postcode = $6, 
+                  closed = $7, 
+                  location = CASE WHEN $8::float8 IS NOT NULL AND $9::float8 IS NOT NULL 
+                             THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)::geography 
                              ELSE location END
-               WHERE id = $9
+               WHERE id = $10
                RETURNING id"#,
             pub_data.name,
             pub_data.address,
             pub_data.town,
-            pub_data.county,
+            pub_data.region,
+            pub_data.country_code,
             pub_data.postcode,
             pub_data.closed,
             pub_data.lat,
@@ -28,22 +29,24 @@ pub async fn insert_pub(pool: &PgPool, pub_data: &ImportPub) -> Result<Uuid> {
         .await?
     } else {
         sqlx::query_scalar!(
-            r#"INSERT INTO pubs (name, address, town, county, postcode, closed, location)
-               VALUES ($1, $2, $3, $4, $5, $6, 
-                       CASE WHEN $7::float8 IS NOT NULL AND $8::float8 IS NOT NULL 
-                            THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography 
+            r#"INSERT INTO pubs (name, address, town, region, country_code, postcode, closed, location)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 
+                       CASE WHEN $8::float8 IS NOT NULL AND $9::float8 IS NOT NULL 
+                            THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)::geography 
                             ELSE NULL END)
                ON CONFLICT (name, town, postcode) 
                DO UPDATE SET 
                   address = EXCLUDED.address,
-                  county = EXCLUDED.county,
+                  region = EXCLUDED.region,
+                  country_code = EXCLUDED.country_code,
                   closed = EXCLUDED.closed,
                   location = COALESCE(EXCLUDED.location, pubs.location)
                RETURNING id"#,
             pub_data.name,
             pub_data.address,
             pub_data.town,
-            pub_data.county,
+            pub_data.region,
+            pub_data.country_code,
             pub_data.postcode,
             pub_data.closed,
             pub_data.lat,

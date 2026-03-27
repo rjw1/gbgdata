@@ -33,7 +33,7 @@ pub fn PubDetail() -> impl IntoView {
                                 let name = p.name.clone();
                                 let address = p.address.clone();
                                 let town = p.town.clone();
-                                let county = p.county.clone();
+                                let region = p.region.clone();
                                 let postcode = p.postcode.clone();
                                 let closed = p.closed;
                                 let years = p.years.clone();
@@ -46,7 +46,7 @@ pub fn PubDetail() -> impl IntoView {
                                         <h1>{name}</h1>
                                         <div class="pub-info">
                                             <p class="address">{address}</p>
-                                            <p class="location">{format!("{}, {}, {}", town, county, postcode)}</p>
+                                            <p class="location">{format!("{}, {}, {}", town, region, postcode)}</p>
                                             {if closed {
                                                 view! { <span class="badge closed">"Closed"</span> }.into_any()
                                             } else {
@@ -102,7 +102,11 @@ pub fn PubDetail() -> impl IntoView {
                                             <h3>"Guide Inclusion Years"</h3>
                                             <div class="year-grid">
                                                 {years.into_iter()
-                                                    .map(|year| view! { <span class="year-tag">{year}</span> })
+                                                    .map(|year| {
+                                                        let class = if year == 1972 { "year-tag trial" } else { "year-tag" };
+                                                        let label = if year == 1972 { "1972 (Trial)".to_string() } else { year.to_string() };
+                                                        view! { <span class=class title=if year == 1972 { "1972 was a trial run of the GBG and is excluded from stats." } else { "" }>{label}</span> }
+                                                    })
                                                     .collect_view()}
                                             </div>
                                         </div>

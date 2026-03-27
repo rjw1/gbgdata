@@ -9,7 +9,10 @@ pub struct ImportPub {
     pub name: String,
     pub address: String,
     pub town: String,
-    pub county: String,
+    #[serde(alias = "county")]
+    pub region: String,
+    #[serde(default)]
+    pub country_code: String,
     pub postcode: String,
     pub closed: bool,
     pub lat: Option<f64>,
@@ -25,7 +28,8 @@ pub fn parse_excel(path: &str) -> Result<Vec<ImportPub>> {
     let mut pubs = Vec::new();
     // Skip first 5 rows (header is row 4, data starts at 5)
     for row in range.rows().skip(5) {
-        let county = row.get(1).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let country_code = row.get(0).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
+        let region = row.get(1).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
         let town = row.get(2).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
         let name = row.get(3).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
         let address = row.get(4).map(|d| d.to_string()).unwrap_or_default().trim().to_string();
@@ -54,7 +58,8 @@ pub fn parse_excel(path: &str) -> Result<Vec<ImportPub>> {
                 name,
                 address,
                 town,
-                county,
+                region,
+                country_code,
                 postcode,
                 closed,
                 lat: None,

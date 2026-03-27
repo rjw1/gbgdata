@@ -154,14 +154,14 @@ pub fn NearMe() -> impl IntoView {
                             let id = p.id;
                             let name = p.name.clone();
                             let town = p.town.clone();
-                            let county = p.county.clone();
+                            let region = p.region.clone();
                             let total = p.total_years_rank.unwrap_or(0);
                             let streak = p.current_streak.unwrap_or(0);
                             let dist = p.distance_meters.map(|d| format!("{:.1} km", d / 1000.0));
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
-                                    <p>{format!("{}, {}", town, county)}</p>
+                                    <p>{format!("{}, {}", town, region)}</p>
                                     
                                     <div class="card-stats">
                                         {dist.map(|d| view! { 
