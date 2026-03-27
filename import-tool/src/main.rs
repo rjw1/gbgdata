@@ -91,7 +91,7 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
     println!("Fetching {} pubs needing geocoding...", limit);
     
     let pubs = sqlx::query!(
-        "SELECT id, name, COALESCE(address, '') as address, COALESCE(town, '') as town, COALESCE(postcode, '') as postcode 
+        "SELECT id, name, COALESCE(address, '') as address, COALESCE(town, '') as town, COALESCE(postcode, '') as postcode, COALESCE(county, '') as county
          FROM pubs WHERE location IS NULL AND closed = false LIMIT $1",
         limit
     )
@@ -107,10 +107,11 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
         let town = p.town.unwrap_or_default();
         let address = p.address.unwrap_or_default();
         let postcode = p.postcode.unwrap_or_default();
+        let county = p.county.unwrap_or_default();
 
         println!("[{}/{}] Geocoding {} in {}...", i + 1, total, name, town);
         
-        match geocoder.geocode(&address, &town, &postcode).await {
+        match geocoder.geocode(&name, &address, &town, &postcode, &county).await {
             Ok(Some((lat, lon))) => {
                 db::update_pub_location(pool, p.id, lat, lon).await?;
                 println!("  Found: {}, {}", lat, lon);

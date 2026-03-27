@@ -29,35 +29,44 @@ impl Geocoder {
         Self { client, url, is_local }
     }
 
-    pub async fn geocode(&self, address: &str, town: &str, postcode: &str) -> Result<Option<(f64, f64)>> {
-        let query = format!("{}, {}, {}", address, town, postcode);
-        
-        let resp = self.client.get(&self.url)
-            .query(&[
-                ("q", query),
-                ("format", "json".to_string()),
-                ("limit", "1".to_string()),
-            ])
-            .send()
-            .await?;
+    pub async fn geocode(&self, name: &str, _address: &str, town: &str, postcode: &str, county: &str) -> Result<Option<(f64, f64)>> {
+        // Fallback strategies in order of reliability
+        let queries = vec![
+            format!("{}, {}", name, town),
+            format!("{}, {}, {}", name, town, county),
+            format!("{}, {}", name, postcode),
+            format!("{}, {}, {}", name, town, postcode),
+            format!("{}", postcode), // Final hail mary: just the postcode
+        ];
 
-        if resp.status().as_u16() == 403 {
-            return Err(anyhow::anyhow!("Nominatim 403 Forbidden - Rate limited or blocked"));
+        for query in queries {
+            let resp = self.client.get(&self.url)
+                .query(&[
+                    ("q", query.clone()),
+                    ("format", "json".to_string()),
+                    ("limit", "1".to_string()),
+                ])
+                .send()
+                .await?;
+
+            if resp.status().as_u16() == 403 {
+                return Err(anyhow::anyhow!("Nominatim 403 Forbidden - Rate limited or blocked"));
+            }
+
+            let results: Vec<NominatimResponse> = resp.json().await?;
+
+            // Only sleep if NOT local (Nominatim policy: 1 request per second)
+            if !self.is_local {
+                sleep(Duration::from_secs(1)).await;
+            }
+
+            if let Some(res) = results.first() {
+                if let (Ok(lat), Ok(lon)) = (res.lat.parse::<f64>(), res.lon.parse::<f64>()) {
+                    return Ok(Some((lat, lon)));
+                }
+            }
         }
 
-        let results: Vec<NominatimResponse> = resp.json().await?;
-        
-        // Only sleep if NOT local (Nominatim policy: 1 request per second)
-        if !self.is_local {
-            sleep(Duration::from_secs(1)).await;
-        }
-
-        if let Some(res) = results.first() {
-            let lat = res.lat.parse::<f64>()?;
-            let lon = res.lon.parse::<f64>()?;
-            Ok(Some((lat, lon)))
-        } else {
-            Ok(None)
-        }
+        Ok(None)
     }
 }
