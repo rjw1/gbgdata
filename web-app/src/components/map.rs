@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos::html;
 use crate::models::PubSummary;
 
 #[component]
