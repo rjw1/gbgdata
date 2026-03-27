@@ -145,6 +145,8 @@ pub fn NearMe() -> impl IntoView {
 
             {move || error.get().map(|msg| view! { <p class="error">{msg}</p> })}
 
+            <p class="accuracy-notice">"Distances are calculated based on automated geocoding and may be approximate."</p>
+
             <div class="pub-grid">
                 <Suspense fallback=|| view! { <p>"Finding pubs..."</p> }>
                     {move || pubs.get().map(|res| match res {

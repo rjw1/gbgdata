@@ -122,6 +122,9 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/explore/year/:year/:county/town/:town") view=LocationPubList/>
                     <Route path=path!("/explore/year/:year/:county/outcode/:outcode") view=LocationPubList/>
                 </Routes>
+                <footer>
+                    <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>
+                </footer>
             </main>
         </Router>
     }
