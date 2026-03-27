@@ -2,13 +2,13 @@ services:
   db:
     image: postgis/postgis:15-3.3
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: gbgdata
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-gbgdata}
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d gbgdata"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-gbgdata}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,8 +20,8 @@ services:
       context: .
       dockerfile: web-app/Dockerfile
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/gbgdata
-      - NOMINATIM_URL=http://nominatim:8080/search
+      - DATABASE_URL=postgres://${DB_USER:-user}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-gbgdata}
+      - NOMINATIM_URL=${NOMINATIM_URL:-}
       - LEPTOS_SITE_ADDR=0.0.0.0:3000
       - LEPTOS_SITE_ROOT=site
     ports:
@@ -34,6 +34,8 @@ services:
       db:
         condition: service_healthy
 
+  # Nominatim is optional. Comment out if not needed.
+  # Note: Requires significant RAM (8GB+ recommended)
   nominatim:
     image: mediagis/nominatim:4.4
     shm_size: 4gb
@@ -45,6 +47,8 @@ services:
       - REPLICATION_URL=https://download.geofabrik.de/europe/united-kingdom-updates/
       - NOMINATIM_POSTGRESQL_SHARED_BUFFERS=2GB
       - NOMINATIM_POSTGRESQL_MAINTENANCE_WORK_MEM=4GB
+    profiles:
+      - with-geocoding
     volumes:
       - nominatim-data:/var/lib/postgresql/14/main
 
