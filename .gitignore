@@ -3,3 +3,13 @@ target/
 **/*.rs.bk
 .env
 .superpowers/
+
+# Data and Logs
+*.xlsx
+*.sql
+pubs.json
+*.log
+!migrations/*.sql
+
+# Web App Artifacts
+site/pkg/
