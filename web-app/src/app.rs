@@ -1,5 +1,6 @@
 use crate::components::pub_list::PubList;
 use crate::components::pub_detail::PubDetail;
+use crate::components::about::About;
 use crate::components::near_me::NearMe;
 use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList, YearDashboard};
 use crate::components::rankings::Rankings;
@@ -105,6 +106,8 @@ pub fn App() -> impl IntoView {
                         <A href="/near-me">"Near Me"</A>
                         " | "
                         <A href="/rankings">"Rankings"</A>
+                        " | "
+                        <A href="/about">"About"</A>
                     </div>
                     <ThemeToggle />
                 </nav>
@@ -112,6 +115,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/") view=PubList/>
                     <Route path=path!("/near-me") view=NearMe/>
                     <Route path=path!("/rankings") view=Rankings/>
+                    <Route path=path!("/about") view=About/>
                     <Route path=path!("/pub/:id") view=PubDetail/>
                     
                     <Route path=path!("/explore") view=ExplorerHome/>
