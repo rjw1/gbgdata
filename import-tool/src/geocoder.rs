@@ -23,13 +23,16 @@ impl Geocoder {
             .build()
             .unwrap();
         
-        let url = std::env::var("NOMINATIM_URL").unwrap_or_else(|_| "http://localhost:8080/search".to_string());
+        let url = std::env::var("NOMINATIM_URL").unwrap_or_default();
         let is_local = url.contains("localhost") || url.contains("127.0.0.1");
 
         Self { client, url, is_local }
     }
 
     pub async fn geocode(&self, name: &str, _address: &str, town: &str, postcode: &str, region: &str) -> Result<Option<(f64, f64)>> {
+        if self.url.is_empty() {
+            return Ok(None);
+        }
         // Fallback strategies in order of reliability
         let queries = vec![
             format!("{}, {}", name, town),

@@ -102,6 +102,10 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
     println!("Found {} pubs. Starting geocoding...", total);
     let geocoder = Geocoder::new();
 
+    if std::env::var("NOMINATIM_URL").unwrap_or_default().is_empty() {
+        println!("WARNING: NOMINATIM_URL not set. Skipping geocoding.");
+    }
+
     for (i, p) in pubs.into_iter().enumerate() {
         let name = p.name;
         let town = p.town.unwrap_or_default();
