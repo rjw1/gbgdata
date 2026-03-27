@@ -116,11 +116,13 @@ pub fn App() -> impl IntoView {
                     
                     <Route path=path!("/explore") view=ExplorerHome/>
                     <Route path=path!("/explore/:region") view=RegionDashboard/>
+                    <Route path=path!("/explore/:region/all") view=LocationPubList/>
                     <Route path=path!("/explore/:region/town/:town") view=LocationPubList/>
                     <Route path=path!("/explore/:region/outcode/:outcode") view=LocationPubList/>
 
                     <Route path=path!("/explore/year/:year") view=YearDashboard/>
                     <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
+                    <Route path=path!("/explore/year/:year/:region/all") view=LocationPubList/>
                     <Route path=path!("/explore/year/:year/:region/town/:town") view=LocationPubList/>
                     <Route path=path!("/explore/year/:year/:region/outcode/:outcode") view=LocationPubList/>
                 </Routes>

@@ -202,6 +202,19 @@ pub fn RegionDashboard() -> impl IntoView {
                                 {if let Some(y) = y_opt { format!("GBG {} Pubs in {}", y, name_title) }
                                  else { format!("GBG Pubs in {}", name_title) }}
                             </h1>
+
+                            <div class="direct-actions">
+                                {
+                                    let url = if let Some(y) = y_opt { format!("/explore/year/{}/{}/all", y, d.name) }
+                                             else { format!("/explore/{}/all", d.name) };
+                                    view! {
+                                        <A href=url attr:class="category-card highlight">
+                                            <h3>"View All Pubs"</h3>
+                                            <p>"See every pub in this region as a single list"</p>
+                                        </A>
+                                    }
+                                }
+                            </div>
                             
                             <section>
                                 <h2>"Browse by Town"</h2>
