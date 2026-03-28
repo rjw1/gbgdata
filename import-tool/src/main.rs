@@ -1,19 +1,19 @@
-mod excel;
 mod db;
+mod excel;
 mod geocoder;
 mod parsers;
 
-use sqlx::postgres::PgPoolOptions;
-use std::env;
-use dotenvy::dotenv;
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
+use dotenvy::dotenv;
 use geocoder::Geocoder;
+use sqlx::postgres::PgPoolOptions;
+use std::env;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Command to run: import (default), geocode, or create-admin
+    /// Command to run: import (default), geocode, create-admin, or migrate
     #[arg(index = 1, default_value = "import")]
     command: String,
 
@@ -57,9 +57,16 @@ async fn main() -> Result<()> {
         .connect(&database_url)
         .await?;
 
+    // Always run migrations
+    println!("Running database migrations...");
+    sqlx::migrate!("../migrations").run(&pool).await?;
+
     match args.command.as_str() {
         "geocode" => run_geocoder(&pool, args.batch).await?,
         "create-admin" => run_create_admin(&pool, args).await?,
+        "migrate" => {
+            println!("Migrations complete.");
+        }
         _ => run_import(&pool, args).await?,
     }
 
@@ -74,8 +81,12 @@ async fn run_create_admin(pool: &sqlx::PgPool, args: Args) -> Result<()> {
     use rand::distributions::{Alphanumeric, DistString};
     use totp_rs::{Algorithm, TOTP};
 
-    let username = args.username.ok_or_else(|| anyhow::anyhow!("--username is required"))?;
-    let password = args.password.ok_or_else(|| anyhow::anyhow!("--password is required"))?;
+    let username = args
+        .username
+        .ok_or_else(|| anyhow::anyhow!("--username is required"))?;
+    let password = args
+        .password
+        .ok_or_else(|| anyhow::anyhow!("--password is required"))?;
 
     println!("Creating admin user: {}...", username);
 
@@ -123,7 +134,14 @@ async fn run_create_admin(pool: &sqlx::PgPool, args: Args) -> Result<()> {
 
     // 4. Save to DB
     // In a real app, we should encrypt totp_secret. For now, we'll store it as is (bytea).
-    db::create_user(pool, &username, &password_hash, &totp_secret, hashed_recovery_codes).await?;
+    db::create_user(
+        pool,
+        &username,
+        &password_hash,
+        &totp_secret,
+        hashed_recovery_codes,
+    )
+    .await?;
 
     println!("\nSUCCESS: Admin user created.");
     println!("Username: {}", username);
@@ -139,9 +157,14 @@ async fn run_create_admin(pool: &sqlx::PgPool, args: Args) -> Result<()> {
 }
 
 async fn run_import(pool: &sqlx::PgPool, args: Args) -> Result<()> {
-    let file_path = args.file.unwrap_or_else(|| "GBG counties one sheet Duncan 2025.xlsx".to_string());
-    
-    println!("Importing from {} (Format: {:?})...", file_path, args.format);
+    let file_path = args
+        .file
+        .unwrap_or_else(|| "GBG counties one sheet Duncan 2025.xlsx".to_string());
+
+    println!(
+        "Importing from {} (Format: {:?})...",
+        file_path, args.format
+    );
 
     let pubs = match args.format {
         Format::Excel => excel::parse_excel(&file_path)?,
@@ -169,7 +192,7 @@ async fn run_import(pool: &sqlx::PgPool, args: Args) -> Result<()> {
 
 async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
     println!("Fetching {} pubs needing geocoding...", limit);
-    
+
     let pubs = sqlx::query!(
         "SELECT id, name, COALESCE(address, '') as address, COALESCE(town, '') as town, COALESCE(postcode, '') as postcode, COALESCE(region, '') as region
          FROM pubs WHERE location IS NULL AND closed = false LIMIT $1",
@@ -182,7 +205,10 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
     println!("Found {} pubs. Starting geocoding...", total);
     let geocoder = Geocoder::new();
 
-    if std::env::var("NOMINATIM_URL").unwrap_or_default().is_empty() {
+    if std::env::var("NOMINATIM_URL")
+        .unwrap_or_default()
+        .is_empty()
+    {
         println!("WARNING: NOMINATIM_URL not set. Skipping geocoding.");
     }
 
@@ -194,8 +220,11 @@ async fn run_geocoder(pool: &sqlx::PgPool, limit: i64) -> Result<()> {
         let region = p.region.unwrap_or_default();
 
         println!("[{}/{}] Geocoding {} in {}...", i + 1, total, name, town);
-        
-        match geocoder.geocode(&name, &address, &town, &postcode, &region).await {
+
+        match geocoder
+            .geocode(&name, &address, &town, &postcode, &region)
+            .await
+        {
             Ok(Some((lat, lon))) => {
                 db::update_pub_location(pool, p.id, lat, lon).await?;
                 println!("  Found: {}, {}", lat, lon);

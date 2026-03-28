@@ -14,7 +14,9 @@ build:
 test:
 	docker compose -f docker-compose.test.yml up -d
 	# Wait for DB to be ready
-	sleep 5
+	sleep 10
+	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test \
+	./scripts/migrate_test_db.sh && \
 	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test \
 	cd web-app && cargo test --features ssr && \
 	cd ../import-tool && cargo test
