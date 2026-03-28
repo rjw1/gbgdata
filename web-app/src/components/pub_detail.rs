@@ -151,6 +151,7 @@ pub fn PubDetail() -> impl IntoView {
                                                     <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
                                                 </Show>
                                             </div>
+
                                         </div>
                                         <div class="pub-info">
                                             <p class="address">{address}</p>
