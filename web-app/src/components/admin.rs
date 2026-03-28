@@ -109,32 +109,32 @@ pub fn AdminDashboard() -> impl IntoView {
                             <h2>"Admin Dashboard"</h2>
                             <p>"Logged in as: " <strong>{u.username}</strong></p>
                             <ActionForm action=logout_action>
-                                <button type="submit">"Logout"</button>
+                                <button type="submit" class="btn btn-ghost btn-sm">"Logout"</button>
                             </ActionForm>
                         </div>
                         <div class="admin-content">
                             <div class="admin-tabs">
-                                <button class=move || if active_tab.get() == "activity" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "activity" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("activity".to_string())>
                                     "Recent Activity"
                                 </button>
-                                <button class=move || if active_tab.get() == "coords" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "coords" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("coords".to_string())>
                                     "Missing Coords"
                                 </button>
-                                <button class=move || if active_tab.get() == "ids" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "ids" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("ids".to_string())>
                                     "Missing IDs"
                                 </button>
-                                <button class=move || if active_tab.get() == "closed" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "closed" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("closed".to_string())>
                                     "Closed (In GBG)"
                                 </button>
-                                <button class=move || if active_tab.get() == "suggestions" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "suggestions" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("suggestions".to_string())>
                                     "Suggestions"
                                 </button>
-                                <button class=move || if active_tab.get() == "users" { "active" } else { "" }
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "users" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("users".to_string())>
                                     "Users"
                                 </button>
@@ -204,13 +204,13 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                 <td>{s.username}</td>
                                                                 <td>{s.created_at.map(|t| t.format("%Y-%m-%d").to_string()).unwrap_or_default()}</td>
                                                                 <td>
-                                                                    <button on:click=move |_| {
+                                                                    <button class="btn btn-primary btn-sm" on:click=move |_| {
                                                                         process_suggestion.dispatch(ProcessSuggestedUpdate {
                                                                             suggestion_id: id,
                                                                             approve: true,
                                                                         });
                                                                     }>"Approve"</button>
-                                                                    <button class="delete-btn" on:click=move |_| {
+                                                                    <button class="btn btn-danger btn-sm" on:click=move |_| {
                                                                         process_suggestion.dispatch(ProcessSuggestedUpdate {
                                                                             suggestion_id: id,
                                                                             approve: false,
@@ -276,10 +276,10 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                 <td>{if u.totp_setup_completed { "✅" } else { "❌" }}</td>
                                                                 <td>{u.last_login.map(|t| t.format("%Y-%m-%d").to_string()).unwrap_or_else(|| "Never".to_string())}</td>
                                                                 <td>
-                                                                    <button on:click=move |_| {
+                                                                    <button class="btn btn-secondary btn-sm" on:click=move |_| {
                                                                         reset_2fa_action.dispatch(crate::server::ResetUser2FA { user_id: id });
                                                                     } disabled=reset_2fa_action.pending()>"Reset 2FA"</button>
-                                                                    <button class="delete-btn" on:click=move |_| {
+                                                                    <button class="btn btn-danger btn-sm" on:click=move |_| {
                                                                         let window = web_sys::window().unwrap();
                                                                         if current_role == "owner" {
                                                                             let _ = window.alert_with_message("You cannot delete the owner. Transfer the role first.");
@@ -308,7 +308,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                             <option value="user">"User"</option>
                                             <option value="admin">"Admin"</option>
                                         </select>
-                                        <button class="add-btn" on:click=move |_| {
+                                        <button class="btn btn-secondary" on:click=move |_| {
                                             create_invite_action.dispatch(crate::server::CreateInvite { role: invite_role.get() });
                                         } disabled=create_invite_action.pending()>"Generate Invite Link"</button>
                                     </div>
@@ -355,12 +355,12 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                 <tr>
                                                                     <td>
                                                                         <code style="margin-right: 0.5rem;">{invite_url}</code>
-                                                                        <button class="add-btn" on:click=on_copy style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">"Copy"</button>
+                                                                        <button class="btn btn-secondary btn-sm" on:click=on_copy>"Copy"</button>
                                                                     </td>
                                                                     <td>{i.role}</td>
                                                                     <td>{i.expires_at.format("%Y-%m-%d").to_string()}</td>
                                                                     <td>
-                                                                        <button class="delete-btn" on:click=move |_| {
+                                                                        <button class="btn btn-danger btn-sm" on:click=move |_| {
                                                                             revoke_invite_action.dispatch(crate::server::RevokeInvite { invite_id: id });
                                                                         } disabled=revoke_invite_action.pending()>"Revoke"</button>
                                                                     </td>
@@ -418,7 +418,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                     }}
                                                                 </td>
                                                                 <td>
-                                                                    <button on:click=move |_| set_editing_pub_id.set(Some(id))>"Edit"</button>
+                                                                    <button class="btn btn-secondary btn-sm" on:click=move |_| set_editing_pub_id.set(Some(id))>"Edit"</button>
                                                                 </td>
                                                             </tr>
                                                         }

@@ -54,13 +54,13 @@ pub fn MyVisits() -> impl IntoView {
                 <h1>"My Visits"</h1>
                 <div class="view-toggle">
                     <button 
-                        class=move || if view_mode.get() == "list" { "active" } else { "" }
+                        class=move || format!("btn btn-sm {}", if view_mode.get() == "list" { "btn-primary active" } else { "btn-ghost" })
                         on:click=move |_| set_view_mode.set("list".to_string())
                     >
                         "List"
                     </button>
                     <button 
-                        class=move || if view_mode.get() == "map" { "active" } else { "" }
+                        class=move || format!("btn btn-sm {}", if view_mode.get() == "map" { "btn-primary active" } else { "btn-ghost" })
                         on:click=move |_| set_view_mode.set("map".to_string())
                     >
                         "Map"
@@ -109,13 +109,13 @@ pub fn MyVisits() -> impl IntoView {
                                     </div>
                                     <div class="stat-card action-card">
                                         <div class="export-buttons">
-                                            <button class="export-btn" on:click=move |_| on_export("csv") disabled=export_action.pending()>
+                                            <button class="btn btn-secondary btn-sm" on:click=move |_| on_export("csv") disabled=export_action.pending()>
                                                 {move || if export_action.pending().get() && export_format.get() == "csv" { "..." } else { "CSV" }}
                                             </button>
-                                            <button class="export-btn" on:click=move |_| on_export("json") disabled=export_action.pending()>
+                                            <button class="btn btn-secondary btn-sm" on:click=move |_| on_export("json") disabled=export_action.pending()>
                                                 {move || if export_action.pending().get() && export_format.get() == "json" { "..." } else { "JSON" }}
                                             </button>
-                                            <button class="export-btn" on:click=move |_| on_export("parquet") disabled=export_action.pending()>
+                                            <button class="btn btn-secondary btn-sm" on:click=move |_| on_export("parquet") disabled=export_action.pending()>
                                                 {move || if export_action.pending().get() && export_format.get() == "parquet" { "..." } else { "Parquet" }}
                                             </button>
                                         </div>
