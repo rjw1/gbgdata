@@ -280,9 +280,14 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                         reset_2fa_action.dispatch(crate::server::ResetUser2FA { user_id: id });
                                                                     } disabled=reset_2fa_action.pending()>"Reset 2FA"</button>
                                                                     <button class="delete-btn" on:click=move |_| {
-                                                                        let confirm = web_sys::window().unwrap().confirm_with_message("Are you sure you want to delete this user?").unwrap_or(false);
-                                                                        if confirm {
-                                                                            delete_user_action.dispatch(crate::server::DeleteUser { user_id: id });
+                                                                        let window = web_sys::window().unwrap();
+                                                                        if current_role == "owner" {
+                                                                            let _ = window.alert_with_message("You cannot delete the owner. Transfer the role first.");
+                                                                        } else {
+                                                                            let confirm = window.confirm_with_message("Are you sure you want to delete this user?").unwrap_or(false);
+                                                                            if confirm {
+                                                                                delete_user_action.dispatch(crate::server::DeleteUser { user_id: id });
+                                                                            }
                                                                         }
                                                                     } disabled=delete_user_action.pending()>"Delete"</button>
                                                                 </td>
