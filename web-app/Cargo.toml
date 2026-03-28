@@ -41,6 +41,7 @@ rand = "0.8"
 hex = "0.4.3"
 wasm-bindgen-futures = "0.4.65"
 qrcodegen = "1.8.0"
+tower = { version = "0.5.3", features = ["util"] }
 
 [features]
 hydrate = [
