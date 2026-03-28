@@ -297,10 +297,35 @@ pub fn AdminDashboard() -> impl IntoView {
                                                     <tbody>
                                                         {list.into_iter().map(|i| {
                                                             let id = i.id;
-                                                            let invite_url = format!("/register?invite={}", id);
+                                                            
+                                                            let invite_url = move || {
+                                                                #[cfg(feature = "hydrate")]
+                                                                {
+                                                                    let window = web_sys::window().unwrap();
+                                                                    let location = window.location();
+                                                                    let origin = location.origin().unwrap_or_else(|_| "http://localhost:3000".to_string());
+                                                                    format!("{}/register?invite={}", origin, id)
+                                                                }
+                                                                #[cfg(not(feature = "hydrate"))]
+                                                                {
+                                                                    format!("/register?invite={}", id)
+                                                                }
+                                                            };
+                                                            
+                                                            let on_copy = move |_| {
+                                                                #[cfg(feature = "hydrate")]
+                                                                {
+                                                                    let url = invite_url();
+                                                                    let _ = js_sys::eval(&format!("navigator.clipboard.writeText('{}')", url));
+                                                                }
+                                                            };
+
                                                             view! {
                                                                 <tr>
-                                                                    <td><code>{invite_url}</code></td>
+                                                                    <td>
+                                                                        <code style="margin-right: 0.5rem;">{invite_url}</code>
+                                                                        <button class="add-btn" on:click=on_copy style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">"Copy"</button>
+                                                                    </td>
                                                                     <td>{i.role}</td>
                                                                     <td>{i.expires_at.format("%Y-%m-%d").to_string()}</td>
                                                                     <td>
