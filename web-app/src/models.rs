@@ -89,3 +89,14 @@ pub struct RegionDetails {
     pub towns: Vec<TownSummary>,
     pub outcodes: Vec<OutcodeSummary>,
 }
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AuditLogEntry {
+    pub id: i32,
+    pub username: String,
+    pub action: String,
+    pub entity_type: String,
+    pub entity_id: Uuid,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}

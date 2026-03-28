@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use crate::server::get_pub_detail;
 use crate::components::stat_ring::StatRing;
+use crate::components::edit_pub::EditPub;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -13,9 +14,12 @@ pub fn PubDetail() -> impl IntoView {
         Uuid::parse_str(&id_str).ok()
     };
 
+    let user = Resource::new(|| (), |_| crate::server::get_current_user());
+    let (show_edit, set_show_edit) = signal(false);
+
     let pub_data = Resource::new(
-        move || id(),
-        move |id| async move {
+        move || (id(), show_edit.get()), // Refresh when edit closes
+        move |(id, _)| async move {
             match id {
                 Some(uuid) => get_pub_detail(uuid).await,
                 None => Err(ServerFnError::new("Invalid Pub ID")),
@@ -30,20 +34,31 @@ pub fn PubDetail() -> impl IntoView {
                     pub_data.get().map(|res| {
                         match res {
                             Ok(p) => {
-                                let name = p.name.clone();
-                                let address = p.address.clone();
-                                let town = p.town.clone();
-                                let region = p.region.clone();
-                                let postcode = p.postcode.clone();
-                                let closed = p.closed;
-                                let years = p.years.clone();
-                                let whatpub = p.whatpub_id.clone();
-                                let gmaps = p.google_maps_id.clone();
-                                let untappd = p.untappd_id.clone();
+                            let name = p.name.clone();
+                            let address = p.address.clone();
+                            let town = p.town.clone();
+                            let region = p.region.clone();
+                            let postcode = p.postcode.clone();
+                            let closed = p.closed;
+                            let years = p.years.clone();
+                            let whatpub = p.whatpub_id.clone();
+                            let gmaps = p.google_maps_id.clone();
+                            let untappd = p.untappd_id.clone();
+                            let untappd_verified = p.untappd_verified;
+                            let p_cloned = p.clone();
 
-                                view! {
-                                    <div class="pub-detail">
-                                        <h1>{name}</h1>
+                            view! {
+                                <div class="pub-detail">
+                                    <Show when=move || show_edit.get()>
+                                        <EditPub pub_data=p_cloned.clone() on_close=Callback::new(move |_| set_show_edit.set(false)) />
+                                    </Show>
+
+                                        <div class="pub-header">
+                                            <h1>{name}</h1>
+                                            <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
+                                                <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
+                                            </Show>
+                                        </div>
                                         <div class="pub-info">
                                             <p class="address">{address}</p>
                                             <p class="location">{format!("{}, {}, {}", town, region, postcode)}</p>
@@ -117,11 +132,10 @@ pub fn PubDetail() -> impl IntoView {
                                                 {whatpub.map(|id| view! { <li><a href=format!("https://whatpub.com/pubs/{}", id) target="_blank">"WhatPub"</a></li> })}
                                                 {gmaps.map(|id| view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> })}
                                                 {untappd.map(|id| {
-                                                    let verified = p.untappd_verified;
                                                     view! {
                                                         <li>
                                                             <a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a>
-                                                            {if verified {
+                                                            {if untappd_verified {
                                                                 view! { 
                                                                     <span class="verified-badge" title="Verified on Untappd">" ✓"</span> 
                                                                     " ("
