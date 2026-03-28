@@ -34,3 +34,15 @@ The tool will output:
 ### Mandatory 2FA
 
 Multi-factor authentication is mandatory for all administrative actions. After logging in with your username and password, you will be prompted for a TOTP code from your authenticator app.
+
+## External Data IDs
+
+### Finding Google Maps Place IDs
+
+To link a pub to Google Maps, you must provide its unique **Place ID**.
+
+1.  Visit the official [Google Maps Place ID Finder](https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder).
+2.  Search for the pub by name and town in the search box.
+3.  Click on the correct result on the map.
+4.  Copy the long alphanumeric string displayed (e.g., `ChIJN1t_tDeuEmsRUsoyG83frY4`).
+5.  Paste this into the **Google Maps ID** field on the **Edit Pub** screen.
