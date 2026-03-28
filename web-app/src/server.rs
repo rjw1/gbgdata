@@ -1840,11 +1840,9 @@ pub async fn register_user(
     username: String,
     password: String,
 ) -> Result<bool, ServerFnError> {
-    use crate::auth::{session, User};
-    use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+    use crate::auth::{hash_password, session, User};
     use leptos::context::use_context;
     use leptos_axum::extract;
-    use rand::rngs::OsRng;
     use sqlx::PgPool;
     use tower_sessions::Session;
 
@@ -1865,12 +1863,8 @@ pub async fn register_user(
     };
 
     // 2. Hash password
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .to_string();
+    let password_hash = hash_password(&password)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 3. Create user
     let mut totp_secret = vec![0u8; 20];
