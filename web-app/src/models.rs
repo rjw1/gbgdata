@@ -187,3 +187,14 @@ pub struct UserAuthStatus {
     pub has_passkeys: bool,
     pub totp_required: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+pub struct UserManagementEntry {
+    pub id: Uuid,
+    pub username: String,
+    pub role: String,
+    pub totp_setup_completed: bool,
+    pub last_login: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+}

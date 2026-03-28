@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus};
+use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus, UserManagementEntry};
 #[cfg(feature = "ssr")]
 use crate::models::{TownSummary, OutcodeSummary, UserInvite};
 use crate::auth::User;
@@ -1695,6 +1695,97 @@ pub async fn get_my_passkeys() -> Result<Vec<crate::models::UserCredential>, Ser
     ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(passkeys)
+}
+
+#[server(GetUsers, "/api")]
+pub async fn get_users(search: String, role_filter: String) -> Result<Vec<UserManagementEntry>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let mut query = String::from("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
+    if !search.is_empty() {
+        query.push_str(&format!(" AND username ILIKE '%{}%'", search.replace("'", "''")));
+    }
+    if role_filter != "all" {
+        query.push_str(&format!(" AND role = '{}'", role_filter.replace("'", "''")));
+    }
+    query.push_str(" ORDER BY username ASC");
+
+    let users = sqlx::query_as::<sqlx::Postgres, UserManagementEntry>(&query)
+        .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(users)
+}
+
+#[server(UpdateUserRole, "/api")]
+pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if admin.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    sqlx::query!("UPDATE users SET role = $1 WHERE id = $2", new_role, user_id)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        admin.id, format!("update_role:{}", new_role), "user", user_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(ResetUser2FA, "/api")]
+pub async fn reset_user_2fa(user_id: Uuid) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if admin.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    // Generate a fresh secret so they MUST re-scan
+    let mut new_secret = vec![0u8; 20];
+    getrandom::getrandom(&mut new_secret).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "UPDATE users SET totp_setup_completed = false, totp_secret_enc = $1 WHERE id = $2",
+        new_secret, user_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        admin.id, "reset_2fa", "user", user_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
 }
 
 #[server(BulkUpdatePubsList, "/api")]
