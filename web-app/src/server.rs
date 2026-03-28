@@ -1156,6 +1156,11 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
     )
     .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        user.id, format!("suggestion_{}", status), "suggestion", suggestion_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(())
 }
 
