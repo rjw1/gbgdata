@@ -39,6 +39,16 @@ pub fn PubDetail() -> impl IntoView {
         },
     );
 
+    let photos = Resource::new(
+        move || (id(), show_edit.get()), // Refresh when edit closes
+        move |(id, _)| async move {
+            match id {
+                Some(uuid) => crate::server::get_pub_photos(uuid).await,
+                None => Ok(vec![]),
+            }
+        },
+    );
+
     view! {
         <div class="pub-detail-container">
             <Suspense fallback=move || view! { <p>"Loading pub details..."</p> }>
@@ -69,14 +79,14 @@ pub fn PubDetail() -> impl IntoView {
                                     </Show>
 
                                         <div class="pub-header">
-                                            <h1>{name}</h1>
+                                            <h1>{name.clone()}</h1>
                                             <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
                                                 <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
                                             </Show>
                                         </div>
                                         <div class="pub-info">
                                             <p class="address">{address}</p>
-                                            <p class="location">{format!("{}, {}, {}", town, region, postcode)}</p>
+                                            <p class="location">{format!("{}, {}, {}", town.clone(), region, postcode.clone())}</p>
                                             {if closed {
                                                 view! { <span class="badge closed">"Closed"</span> }.into_any()
                                             } else {
@@ -162,12 +172,56 @@ pub fn PubDetail() -> impl IntoView {
                                             </div>
                                         </Show>
 
+                                        <Suspense fallback=|| view! { <p>"Loading photos..."</p> }>
+                                            {move || photos.get().map(|res| {
+                                                match res {
+                                                    Ok(p_list) if !p_list.is_empty() => view! {
+                                                        <div class="stats-card pub-photos-section">
+                                                            <h2>"Photos"</h2>
+                                                            <div class="pub-photos-grid">
+                                                                {p_list.into_iter().map(|p| view! {
+                                                                    <div class="photo-item">
+                                                                        <a href=p.image_url.clone() target="_blank">
+                                                                            <img src=p.image_url.clone() alt=p.owner_name.clone() style="max-width: 100%; border-radius: 8px;" />
+                                                                        </a>
+                                                                        <p class="attribution">
+                                                                            "Photo: " 
+                                                                            <a href=p.original_url.clone() target="_blank">
+                                                                                {if p.flickr_id.is_some() { "Flickr" } else { "Source" }}
+                                                                            </a>
+                                                                            " by " <strong>{p.owner_name.clone()}</strong>
+                                                                            " (" 
+                                                                            <a href=p.license_url.clone() target="_blank">{p.license_type.clone()}</a>
+                                                                            ")"
+                                                                        </p>
+                                                                    </div>
+                                                                }).collect_view()}
+                                                            </div>
+                                                        </div>
+                                                    }.into_any(),
+                                                    _ => ().into_any(),
+                                                }
+                                            })}
+                                        </Suspense>
+
                                         <div class="external-links">
                                             <h3>"Links"</h3>
                                             <ul>
-                                                {whatpub.map(|id| view! { <li><a href=format!("https://camra.org.uk/pubs/{}", id) target="_blank">"WhatPub"</a></li> })}
-                                                {gmaps.map(|id| view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> })}
-                                                {untappd.map(|id| {
+                                                {if let Some(id) = whatpub.clone() {
+                                                    view! { <li><a href=format!("https://camra.org.uk/pubs/{}", id) target="_blank">"WhatPub"</a></li> }.into_any()
+                                                } else {
+                                                    let search_url = format!("https://camra.org.uk/pubs/?pub_search={}+{}", name.replace(' ', "+"), postcode.replace(' ', "+"));
+                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on WhatPub"</a></li> }.into_any()
+                                                }}
+                                                
+                                                {if let Some(id) = gmaps.clone() {
+                                                    view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> }.into_any()
+                                                } else {
+                                                    let search_url = format!("https://www.google.com/maps/search/{}+{}/", name.replace(' ', "+"), postcode.replace(' ', "+"));
+                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on Google Maps"</a></li> }.into_any()
+                                                }}
+
+                                                {if let Some(id) = untappd.clone() {
                                                     view! {
                                                         <li>
                                                             <a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a>
@@ -182,8 +236,11 @@ pub fn PubDetail() -> impl IntoView {
                                                                 "".into_any()
                                                             }}
                                                         </li>
-                                                    }
-                                                })}
+                                                    }.into_any()
+                                                } else {
+                                                    let search_url = format!("https://untappd.com/search?q={}+{}&type=venue&sort=", name.replace(' ', "+"), town.replace(' ', "+"));
+                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on Untappd"</a></li> }.into_any()
+                                                }}
                                             </ul>
                                         </div>
                                     </div>

@@ -21,6 +21,37 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
     let (rgl_id, set_rgl_id) = signal(pub_data.rgl_id.clone());
     let (years, set_years) = signal(pub_data.years.clone());
 
+    // Photo state
+    let (flickr_url, set_flickr_url) = signal(String::new());
+    let (photo_title, set_photo_title) = signal(String::new());
+    let (photo_owner, set_photo_owner) = signal(String::new());
+    let (photo_image_url, set_photo_image_url) = signal(String::new());
+    let (photo_original_url, set_photo_original_url) = signal(String::new());
+    let (photo_license, set_photo_license) = signal(String::new());
+    let (photo_license_url, set_photo_license_url) = signal(String::new());
+    let (photo_is_cc, set_photo_is_cc) = signal(true);
+
+    let fetch_flickr = ServerAction::<crate::server::FetchFlickrPhoto>::new();
+    let add_photo_action = ServerAction::<crate::server::AddPubPhoto>::new();
+
+    Effect::new(move |_| {
+        if let Some(Ok(info)) = fetch_flickr.value().get() {
+            set_photo_title.set(info.title);
+            set_photo_owner.set(info.owner_name);
+            set_photo_image_url.set(info.image_url);
+            set_photo_original_url.set(info.original_url);
+            set_photo_license.set(info.license_type);
+            set_photo_license_url.set(info.license_url);
+            set_photo_is_cc.set(info.is_cc_licensed);
+        }
+    });
+
+    let on_fetch_flickr = move |_| {
+        fetch_flickr.dispatch(crate::server::FetchFlickrPhoto {
+            url_or_id: flickr_url.get(),
+        });
+    };
+
     let current_year = chrono::Datelike::year(&chrono::Local::now());
     let all_years: Vec<i32> = (1972..=current_year).rev().collect();
 
@@ -54,6 +85,22 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
             rgl_id: rgl_id.get(),
             years: years.get(),
         });
+
+        if !photo_image_url.get().is_empty() && photo_is_cc.get() {
+            add_photo_action.dispatch(crate::server::AddPubPhoto {
+                pub_id: pub_data.id,
+                flickr_info: crate::models::FlickrPhotoInfo {
+                    flickr_id: flickr_url.get(), // Might be empty if manual
+                    title: photo_title.get(),
+                    owner_name: photo_owner.get(),
+                    image_url: photo_image_url.get(),
+                    original_url: photo_original_url.get(),
+                    license_type: photo_license.get(),
+                    license_url: photo_license_url.get(),
+                    is_cc_licensed: photo_is_cc.get(),
+                }
+            });
+        }
     };
 
     Effect::new(move |_| {
@@ -123,8 +170,16 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                         </div>
                         <div class="form-group">
                             <label>"Google Maps ID"</label>
-                            <input type="text" value=move || google_maps_id.get().unwrap_or_default() 
-                                on:input=move |ev| set_google_maps_id.set(Some(event_target_value(&ev))) />
+                            <div class="input-with-button">
+                                <input type="text" value=move || google_maps_id.get().unwrap_or_default() 
+                                    on:input=move |ev| set_google_maps_id.set(Some(event_target_value(&ev))) />
+                                <button type="button" class="helper-btn" on:click=move |_| {
+                                    let _ = window().open_with_url_and_target("https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder", "_blank");
+                                }>"Find ID"</button>
+                            </div>
+                            <p class="field-helper">
+                                {move || format!("Search for '{}, {}' in the finder tool.", name.get(), postcode.get())}
+                            </p>
                         </div>
                         <div class="form-group">
                             <label>"RGL ID"</label>
@@ -145,6 +200,61 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                                 </label>
                             }
                         }).collect_view()}
+                    </div>
+
+                    <h4>"Add Photo"</h4>
+                    <div class="photo-management">
+                        <div class="form-group">
+                            <label>"Flickr URL or Photo ID"</label>
+                            <div class="input-with-button">
+                                <input type="text" value=flickr_url on:input=move |ev| set_flickr_url.set(event_target_value(&ev)) placeholder="https://www.flickr.com/photos/..." />
+                                <button type="button" on:click=on_fetch_flickr disabled=fetch_flickr.pending()>
+                                    {move || if fetch_flickr.pending().get() { "Fetching..." } else { "Fetch Details" }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label>"Photo Title"</label>
+                                <input type="text" value=photo_title on:input=move |ev| set_photo_title.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group">
+                                <label>"Image URL (Direct link)"</label>
+                                <input type="text" value=photo_image_url on:input=move |ev| set_photo_image_url.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group">
+                                <label>"Owner/Attribution Name"</label>
+                                <input type="text" value=photo_owner on:input=move |ev| set_photo_owner.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group">
+                                <label>"Original Source URL"</label>
+                                <input type="text" value=photo_original_url on:input=move |ev| set_photo_original_url.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group">
+                                <label>"License Type"</label>
+                                <input type="text" value=photo_license on:input=move |ev| set_photo_license.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group">
+                                <label>"License URL"</label>
+                                <input type="text" value=photo_license_url on:input=move |ev| set_photo_license_url.set(event_target_value(&ev)) />
+                            </div>
+                            <div class="form-group checkbox">
+                                <label>
+                                    <input type="checkbox" checked=photo_is_cc on:change=move |ev| set_photo_is_cc.set(event_target_checked(&ev)) />
+                                    " Creative Commons Licensed"
+                                </label>
+                            </div>
+                        </div>
+                        {move || if !photo_image_url.get().is_empty() {
+                            view! {
+                                <div class="photo-preview">
+                                    <img src=photo_image_url.get() style="max-width: 200px; border-radius: 4px;" />
+                                </div>
+                            }.into_any()
+                        } else {
+                            ().into_any()
+                        }}
                     </div>
 
                     <div class="form-actions">

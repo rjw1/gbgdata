@@ -748,7 +748,7 @@ pub async fn get_pub_photos(pub_id: Uuid) -> Result<Vec<crate::models::PubPhoto>
 
     let photos = sqlx::query_as!(
         crate::models::PubPhoto,
-        r#"SELECT id, pub_id, flickr_id, image_url, owner_name, license_type, license_url, COALESCE(is_cc_licensed, TRUE) as "is_cc_licensed!: bool"
+        r#"SELECT id, pub_id, flickr_id, image_url, original_url, owner_name, license_type, license_url, COALESCE(is_cc_licensed, TRUE) as "is_cc_licensed!: bool"
            FROM pub_photos WHERE pub_id = $1 ORDER BY created_at DESC"#,
         pub_id
     )

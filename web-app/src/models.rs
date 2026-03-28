@@ -128,6 +128,7 @@ pub struct PubPhoto {
     pub pub_id: Uuid,
     pub flickr_id: Option<String>,
     pub image_url: String,
+    pub original_url: String,
     pub owner_name: String,
     pub license_type: String,
     pub license_url: String,
