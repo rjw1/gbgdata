@@ -29,6 +29,12 @@ parquet = { version = "53", optional = true }
 arrow = { version = "53", optional = true }
 web-sys = { version = "0.3", features = ["Geolocation", "Navigator", "Window", "Position", "PositionError", "Coordinates", "Storage"] }
 js-sys = "0.3"
+argon2 = { version = "0.5", features = ["std"] }
+totp-rs = { version = "5.7", features = ["qr"] }
+tower-sessions = { version = "0.15", optional = true }
+tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"], optional = true }
+base64 = "0.22"
+rand = "0.8"
 
 [features]
 hydrate = [
@@ -48,6 +54,8 @@ ssr = [
     "dep:csv",
     "dep:parquet",
     "dep:arrow",
+    "dep:tower-sessions",
+    "dep:tower-sessions-sqlx-store",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
