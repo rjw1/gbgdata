@@ -121,7 +121,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                 <h3>"Community Suggestions"</h3>
                                 <Transition fallback=move || view! { <p>"Loading suggestions..."</p> }>
                                     {move || match suggestions.get() {
-                                        Some(Ok(list)) => view! {
+                                        Some(Ok(list)) if !list.is_empty() => view! {
                                             <table class="audit-log-table">
                                                 <thead>
                                                     <tr>
@@ -159,6 +159,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                                 </tbody>
                                             </table>
                                         }.into_any(),
+                                        Some(Ok(_)) => view! { <p>"No pending suggestions."</p> }.into_any(),
                                         _ => view! { <p>"Error loading suggestions."</p> }.into_any(),
                                     }}
                                 </Transition>

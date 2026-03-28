@@ -1047,16 +1047,15 @@ pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::
 
     let status_filter = status.unwrap_or_else(|| "pending".to_string());
 
-    let suggestions = sqlx::query_as!(
-        crate::models::SuggestedUpdate,
-        r#"SELECT s.id, s.pub_id, p.name as "pub_name", s.user_id, u.username, s.status, s.suggested_data, s.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+    let suggestions = sqlx::query_as::<sqlx::Postgres, crate::models::SuggestedUpdate>(
+        r#"SELECT s.id, s.pub_id, p.name as pub_name, s.user_id, u.username, s.status, s.suggested_data, s.created_at
            FROM suggested_updates s
            JOIN pubs p ON s.pub_id = p.id
            JOIN users u ON s.user_id = u.id
            WHERE s.status = $1
-           ORDER BY s.created_at DESC"#,
-        status_filter
+           ORDER BY s.created_at DESC"#
     )
+    .bind(status_filter)
     .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(suggestions)
