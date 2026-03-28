@@ -1551,8 +1551,6 @@ pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
                 user_session.id
             ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-            leptos::logging::log!("GetCurrentUser: id={}, username={}, role={}", user.id, user.username, user.role);
-
             Ok(Some(User {
                 id: user.id,
                 username: user.username,
