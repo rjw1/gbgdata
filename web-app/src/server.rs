@@ -1,7 +1,7 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus, UserManagementEntry};
+use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus, UserManagementEntry, UserInvite};
 #[cfg(feature = "ssr")]
-use crate::models::{TownSummary, OutcodeSummary, UserInvite};
+use crate::models::{TownSummary, OutcodeSummary};
 use crate::auth::User;
 use uuid::Uuid;
 
@@ -1297,7 +1297,7 @@ pub async fn export_user_visits(format: String) -> Result<String, ServerFnError>
 }
 
 #[server(CreateInvite, "/api")]
-pub async fn create_invite(role: String, expires_in_days: i64) -> Result<Uuid, ServerFnError> {
+pub async fn create_invite(role: String) -> Result<Uuid, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     use leptos_axum::extract;
@@ -1306,28 +1306,33 @@ pub async fn create_invite(role: String, expires_in_days: i64) -> Result<Uuid, S
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if admin.role != "admin" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(expires_in_days);
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
 
     // Use query_scalar (non-macro) to avoid OffsetDateTime issues with macros
     let invite_id: Uuid = sqlx::query_scalar(
         "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id"
     )
-    .bind(role)
+    .bind(&role)
     .bind(expires_at)
-    .bind(user.id)
+    .bind(admin.id)
     .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        admin.id, format!("create_invite:{}", role), "invite", invite_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(invite_id)
 }
 
-#[server(GetInvites, "/api")]
-pub async fn get_invites() -> Result<serde_json::Value, ServerFnError> {
+#[server(GetPendingInvites, "/api")]
+pub async fn get_pending_invites() -> Result<Vec<UserInvite>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     use leptos_axum::extract;
@@ -1344,37 +1349,81 @@ pub async fn get_invites() -> Result<serde_json::Value, ServerFnError> {
 
     let invites = sqlx::query_as!(
         UserInvite,
-        r#"SELECT id, role, expires_at as "expires_at: chrono::DateTime<chrono::Utc>", used_at as "used_at: chrono::DateTime<chrono::Utc>" FROM user_invites ORDER BY expires_at DESC"#
+        r#"SELECT id, role, expires_at as "expires_at: chrono::DateTime<chrono::Utc>", used_at as "used_at: chrono::DateTime<chrono::Utc>" 
+           FROM user_invites 
+           WHERE used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+           ORDER BY expires_at DESC"#
     )
     .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(serde_json::to_value(invites).unwrap())
+    Ok(invites)
 }
 
-#[server(RegisterWithInvite, "/api")]
-pub async fn register_with_invite(invite_id: Uuid, username: String, password: String) -> Result<(), ServerFnError> {
+#[server(RevokeInvite, "/api")]
+pub async fn revoke_invite(invite_id: Uuid) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if admin.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    sqlx::query!("DELETE FROM user_invites WHERE id = $1", invite_id)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        admin.id, "revoke_invite", "invite", invite_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(ValidateInvite, "/api")]
+pub async fn validate_invite(invite_id: Uuid) -> Result<Option<String>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    let invite = sqlx::query!(
+        "SELECT role FROM user_invites WHERE id = $1 AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP",
+        invite_id
+    ).fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(invite.map(|i| i.role))
+}
+
+#[server(RegisterUser, "/api")]
+pub async fn register_user(invite_id: Uuid, username: String, password: String) -> Result<bool, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
     use rand::rngs::OsRng;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::{User, session};
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 1. Verify invite
-    let invite = sqlx::query_as!(
-        UserInvite,
-        r#"SELECT id, role, expires_at as "expires_at: chrono::DateTime<chrono::Utc>", used_at as "used_at: chrono::DateTime<chrono::Utc>" FROM user_invites WHERE id = $1"#,
+    let invite = sqlx::query!(
+        "SELECT role FROM user_invites WHERE id = $1 AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP",
         invite_id
-    )
-    .fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?
-    .ok_or_else(|| ServerFnError::new("Invalid invite"))?;
+    ).fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    if invite.used_at.is_some() {
-        return Err(ServerFnError::new("Invite already used"));
-    }
-    if invite.expires_at < chrono::Utc::now() {
-        return Err(ServerFnError::new("Invite expired"));
-    }
+    let role = match invite {
+        Some(i) => i.role,
+        None => return Err(ServerFnError::new("Invalid or expired invitation")),
+    };
 
     // 2. Hash password
     let salt = SaltString::generate(&mut OsRng);
@@ -1385,28 +1434,33 @@ pub async fn register_with_invite(invite_id: Uuid, username: String, password: S
         .to_string();
 
     // 3. Create user
-    // Generate a temporary TOTP secret that must be changed
     let mut totp_secret = vec![0u8; 20];
     getrandom::getrandom(&mut totp_secret).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let mut tx = pool.begin().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     
-    sqlx::query!(
+    let user_id = sqlx::query_scalar!(
         "INSERT INTO users (username, password_hash, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash) 
-         VALUES ($1, $2, $3, $4, $5, $6)",
-        username, password_hash, invite.role, false, totp_secret, &Vec::<String>::new()
-    )
-    .execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+         VALUES ($1, $2, $3, false, $4, $5) RETURNING id",
+        username, password_hash, role, totp_secret, &Vec::<String>::new()
+    ).fetch_one(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "UPDATE user_invites SET used_at = CURRENT_TIMESTAMP WHERE id = $1",
         invite_id
-    )
-    .execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    ).execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     tx.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(())
+    // 4. Log in the new user
+    session::login(&session, &User {
+        id: user_id,
+        username: username.clone(),
+        role: role.clone(),
+        totp_setup_completed: false,
+    }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(true)
 }
 
 #[server(GetAuditLogs, "/api")]

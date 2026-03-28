@@ -5,6 +5,7 @@ use crate::components::near_me::NearMe;
 use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList, YearDashboard};
 use crate::components::rankings::Rankings;
 use crate::components::login::LoginForm;
+use crate::components::register::RegisterPage;
 use crate::components::setup_2fa::Setup2FA;
 use crate::components::profile::Profile;
 use crate::components::admin::AdminDashboard;
@@ -157,6 +158,7 @@ fn RouterContent() -> impl IntoView {
             <Routes fallback=|| view! { "Page not found." }>
                 <Route path=path!("/") view=PubList/>
                 <Route path=path!("/login") view=LoginForm/>
+                <Route path=path!("/register") view=RegisterPage/>
                 <Route path=path!("/setup-2fa") view=Setup2FA/>
                 <Route path=path!("/profile") view=Profile/>
                 <Route path=path!("/admin") view=AdminDashboard/>

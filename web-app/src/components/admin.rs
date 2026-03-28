@@ -12,6 +12,7 @@ pub fn AdminDashboard() -> impl IntoView {
     let (editing_pub_id, set_editing_pub_id) = signal(None::<uuid::Uuid>);
     let (user_search, set_user_search) = signal(String::new());
     let (role_filter, set_role_filter) = signal(String::from("all"));
+    let (invite_role, set_invite_role) = signal(String::from("user"));
 
     let users_list = Resource::new(
         move || (active_tab.get(), user_search.get(), role_filter.get()),
@@ -24,12 +25,31 @@ pub fn AdminDashboard() -> impl IntoView {
         }
     );
 
+    let pending_invites = Resource::new(
+        move || active_tab.get(),
+        |tab| async move {
+            if tab == "users" {
+                crate::server::get_pending_invites().await
+            } else {
+                Ok(vec![])
+            }
+        }
+    );
+
     let update_role_action = ServerAction::<crate::server::UpdateUserRole>::new();
     let reset_2fa_action = ServerAction::<crate::server::ResetUser2FA>::new();
+    let create_invite_action = ServerAction::<crate::server::CreateInvite>::new();
+    let revoke_invite_action = ServerAction::<crate::server::RevokeInvite>::new();
 
     Effect::new(move |_| {
         if update_role_action.value().get().is_some() || reset_2fa_action.value().get().is_some() {
             users_list.refetch();
+        }
+    });
+
+    Effect::new(move |_| {
+        if create_invite_action.value().get().is_some() || revoke_invite_action.value().get().is_some() {
+            pending_invites.refetch();
         }
     });
 
@@ -249,6 +269,56 @@ pub fn AdminDashboard() -> impl IntoView {
                                         _ => view! { <p>"Error loading users."</p> }.into_any(),
                                     }}
                                 </Transition>
+
+                                <div class="admin-invites">
+                                    <h3>"Pending Invitations"</h3>
+                                    <div class="list-controls">
+                                        <select on:change=move |ev| set_invite_role.set(event_target_value(&ev))>
+                                            <option value="user">"User"</option>
+                                            <option value="admin">"Admin"</option>
+                                        </select>
+                                        <button class="add-btn" on:click=move |_| {
+                                            create_invite_action.dispatch(crate::server::CreateInvite { role: invite_role.get() });
+                                        } disabled=create_invite_action.pending()>"Generate Invite Link"</button>
+                                    </div>
+
+                                    <Transition fallback=move || view! { <p>"Loading invites..."</p> }>
+                                        {move || match pending_invites.get() {
+                                            Some(Ok(list)) if !list.is_empty() => view! {
+                                                <table class="audit-log-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>"Invite Link"</th>
+                                                            <th>"Role"</th>
+                                                            <th>"Expires"</th>
+                                                            <th>"Action"</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {list.into_iter().map(|i| {
+                                                            let id = i.id;
+                                                            let invite_url = format!("/register?invite={}", id);
+                                                            view! {
+                                                                <tr>
+                                                                    <td><code>{invite_url}</code></td>
+                                                                    <td>{i.role}</td>
+                                                                    <td>{i.expires_at.format("%Y-%m-%d").to_string()}</td>
+                                                                    <td>
+                                                                        <button class="delete-btn" on:click=move |_| {
+                                                                            revoke_invite_action.dispatch(crate::server::RevokeInvite { invite_id: id });
+                                                                        } disabled=revoke_invite_action.pending()>"Revoke"</button>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        }).collect_view()}
+                                                    </tbody>
+                                                </table>
+                                            }.into_any(),
+                                            Some(Ok(_)) => view! { <p>"No pending invites."</p> }.into_any(),
+                                            _ => view! { <p>"Error loading invites."</p> }.into_any(),
+                                        }}
+                                    </Transition>
+                                </div>
                             </Show>
 
                             <Show when=move || active_tab.get() != "activity" && active_tab.get() != "suggestions" && active_tab.get() != "users">
