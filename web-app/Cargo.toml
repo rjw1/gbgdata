@@ -16,6 +16,7 @@ leptos_meta = { version = "0.8.0" }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 wasm-bindgen = { version = "0.2.106", optional = true }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
 uuid = { version = "1", features = ["v4", "serde", "js"] }
 getrandom = { version = "0.2", features = ["js"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -31,8 +32,8 @@ web-sys = { version = "0.3", features = ["Geolocation", "Navigator", "Window", "
 js-sys = "0.3"
 argon2 = { version = "0.5", features = ["std"] }
 totp-rs = { version = "5.7", features = ["qr"] }
-tower-sessions = { version = "0.15", optional = true }
-tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"], optional = true }
+tower-sessions = { version = "0.15.0", optional = true }
+tower-sessions-sqlx-store = { git = "https://github.com/maxcountryman/tower-sessions-stores", branch = "main", features = ["postgres"], optional = true }
 base64 = "0.22"
 rand = "0.8"
 
