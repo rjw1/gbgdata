@@ -129,7 +129,7 @@ pub fn PubDetail() -> impl IntoView {
                                         <div class="external-links">
                                             <h3>"Links"</h3>
                                             <ul>
-                                                {whatpub.map(|id| view! { <li><a href=format!("https://whatpub.com/pubs/{}", id) target="_blank">"WhatPub"</a></li> })}
+                                                {whatpub.map(|id| view! { <li><a href=format!("https://camra.org.uk/pubs/{}", id) target="_blank">"WhatPub"</a></li> })}
                                                 {gmaps.map(|id| view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> })}
                                                 {untappd.map(|id| {
                                                     view! {
