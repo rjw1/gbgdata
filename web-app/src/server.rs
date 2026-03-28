@@ -1427,8 +1427,10 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
     ).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let otp_url = totp.get_url();
-    let qr_code = {
+    let qr_code_data_url = {
         use qrcodegen::{QrCode, QrCodeEcc};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        
         let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium).map_err(|e| ServerFnError::new(e.to_string()))?;
         let size = qr.size();
         
@@ -1443,12 +1445,13 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
             }
         }
         svg.push_str("  </g>\n</svg>");
-        svg
+        
+        format!("data:image/svg+xml;base64,{}", STANDARD.encode(svg))
     };
     let secret = totp.get_secret_base32();
 
     Ok(serde_json::json!({
-        "qr_code": qr_code,
+        "qr_code": qr_code_data_url,
         "url": otp_url,
         "secret": secret
     }))
