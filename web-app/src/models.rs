@@ -144,7 +144,7 @@ pub struct SuggestedUpdate {
     pub username: String,
     pub status: String,
     pub suggested_data: serde_json::Value,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
@@ -155,5 +155,22 @@ pub struct AuditLogEntry {
     pub action: String,
     pub entity_type: String,
     pub entity_id: Uuid,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserInvite {
+    pub id: Uuid,
+    pub role: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub used_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserCredential {
+    pub user_id: Uuid,
+    pub credential_id: Vec<u8>,
+    pub public_key: Vec<u8>,
 }

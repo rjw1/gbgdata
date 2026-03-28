@@ -1,6 +1,8 @@
 pub mod pub_list;
 pub mod pub_detail;
 pub mod about;
+pub mod log_visit;
+pub mod my_visits;
 pub mod near_me;
 pub mod stat_ring;
 pub mod login;

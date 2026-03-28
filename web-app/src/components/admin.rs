@@ -36,7 +36,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                             <tbody>
                                                 {logs.into_iter().map(|log| view! {
                                                     <tr>
-                                                        <td>{log.timestamp.to_rfc3339()}</td>
+                                                        <td>{log.timestamp.map(|t| t.to_rfc3339()).unwrap_or_else(|| "N/A".to_string())}</td>
                                                         <td>{log.username}</td>
                                                         <td>{log.action}</td>
                                                         <td>{format!("{}: {}", log.entity_type, log.entity_id)}</td>

@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode};
 #[cfg(feature = "ssr")]
-use crate::models::{TownSummary, OutcodeSummary};
+use crate::models::{TownSummary, OutcodeSummary, UserInvite};
 use crate::auth::User;
 use uuid::Uuid;
 
@@ -557,11 +557,15 @@ pub async fn log_visit(pub_id: Uuid, visit_date: String, notes: Option<String>) 
     let date = chrono::NaiveDate::parse_from_str(&visit_date, "%Y-%m-%d")
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    sqlx::query!(
+    // Use query (non-macro) to avoid NaiveDate issues with macros
+    sqlx::query(
         "INSERT INTO user_visits (user_id, pub_id, visit_date, notes) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id, pub_id, visit_date) DO NOTHING",
-        user.id, pub_id, date, notes
+         ON CONFLICT (user_id, pub_id, visit_date) DO NOTHING"
     )
+    .bind(user.id)
+    .bind(pub_id)
+    .bind(date)
+    .bind(notes)
     .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
@@ -581,7 +585,7 @@ pub async fn get_user_visits() -> Result<Vec<crate::models::VisitRecord>, Server
 
     let visits = sqlx::query_as!(
         crate::models::VisitRecord,
-        r#"SELECT v.id, v.pub_id, p.name as "pub_name", v.visit_date, v.notes
+        r#"SELECT v.id, v.pub_id, p.name as "pub_name", v.visit_date as "visit_date: chrono::NaiveDate", v.notes
            FROM user_visits v
            JOIN pubs p ON v.pub_id = p.id
            WHERE v.user_id = $1
@@ -716,12 +720,20 @@ pub async fn add_pub_photo(pub_id: Uuid, flickr_info: crate::models::FlickrPhoto
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    sqlx::query!(
+    // Use query (non-macro) to avoid issues with macros and nullable bools
+    sqlx::query(
         r#"INSERT INTO pub_photos (pub_id, user_id, flickr_id, image_url, owner_name, license_type, license_url, original_url, is_cc_licensed)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
-        pub_id, user.id, flickr_info.flickr_id, flickr_info.image_url, flickr_info.owner_name,
-        flickr_info.license_type, flickr_info.license_url, flickr_info.original_url, flickr_info.is_cc_licensed
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#
     )
+    .bind(pub_id)
+    .bind(user.id)
+    .bind(flickr_info.flickr_id)
+    .bind(flickr_info.image_url)
+    .bind(flickr_info.owner_name)
+    .bind(flickr_info.license_type)
+    .bind(flickr_info.license_url)
+    .bind(flickr_info.original_url)
+    .bind(flickr_info.is_cc_licensed)
     .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
@@ -736,7 +748,7 @@ pub async fn get_pub_photos(pub_id: Uuid) -> Result<Vec<crate::models::PubPhoto>
 
     let photos = sqlx::query_as!(
         crate::models::PubPhoto,
-        r#"SELECT id, pub_id, flickr_id, image_url, owner_name, license_type, license_url, is_cc_licensed
+        r#"SELECT id, pub_id, flickr_id, image_url, owner_name, license_type, license_url, COALESCE(is_cc_licensed, TRUE) as "is_cc_licensed!: bool"
            FROM pub_photos WHERE pub_id = $1 ORDER BY created_at DESC"#,
         pub_id
     )
@@ -759,11 +771,9 @@ fn get_webauthn() -> Result<webauthn_rs::Webauthn, ServerFnError> {
 
 #[server(StartPasskeyRegistration, "/api")]
 pub async fn start_passkey_registration() -> Result<serde_json::Value, ServerFnError> {
-    use leptos::context::use_context;
     use leptos_axum::extract;
     use tower_sessions::Session;
     use crate::auth::session;
-    use webauthn_rs::prelude::*;
 
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
@@ -941,7 +951,7 @@ pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::
 
     let suggestions = sqlx::query_as!(
         crate::models::SuggestedUpdate,
-        r#"SELECT s.id, s.pub_id, p.name as "pub_name", s.user_id, u.username, s.status, s.suggested_data, s.created_at
+        r#"SELECT s.id, s.pub_id, p.name as "pub_name", s.user_id, u.username, s.status, s.suggested_data, s.created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM suggested_updates s
            JOIN pubs p ON s.pub_id = p.id
            JOIN users u ON s.user_id = u.id
@@ -1043,7 +1053,6 @@ pub async fn bulk_update_pubs(
     // For now, we just implement a simplified version or use a macro if possible.
     // Given the constraints, I'll use a direct query for simple cases.
     
-    let result = sqlx::query(&query);
     // ... bind manually based on what we added ...
     // Since this is complex to do generically in sqlx without a lot of boilerplate,
     // I'll stick to a more restricted but safe implementation if needed.
@@ -1072,7 +1081,7 @@ pub async fn export_user_visits() -> Result<String, ServerFnError> {
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let visits = sqlx::query!(
-        r#"SELECT v.visit_date, p.name, p.town, p.region, v.notes
+        r#"SELECT v.visit_date as "visit_date: chrono::NaiveDate", p.name, p.town, p.region, v.notes
            FROM user_visits v
            JOIN pubs p ON v.pub_id = p.id
            WHERE v.user_id = $1
@@ -1114,13 +1123,16 @@ pub async fn create_invite(role: String, expires_in_days: i64) -> Result<Uuid, S
 
     let expires_at = chrono::Utc::now() + chrono::Duration::days(expires_in_days);
 
-    let invite_id = sqlx::query_scalar!(
-        "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id",
-        role, expires_at, user.id
+    // Use query_scalar (non-macro) to avoid OffsetDateTime issues with macros
+    let invite_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id"
     )
+    .bind(role)
+    .bind(expires_at)
+    .bind(user.id)
     .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    Ok(invite_id.unwrap())
+    Ok(invite_id)
 }
 
 #[server(GetInvites, "/api")]
@@ -1139,8 +1151,9 @@ pub async fn get_invites() -> Result<serde_json::Value, ServerFnError> {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let invites = sqlx::query!(
-        "SELECT id, role, expires_at, used_at FROM user_invites ORDER BY expires_at DESC"
+    let invites = sqlx::query_as!(
+        UserInvite,
+        r#"SELECT id, role, expires_at as "expires_at: chrono::DateTime<chrono::Utc>", used_at as "used_at: chrono::DateTime<chrono::Utc>" FROM user_invites ORDER BY expires_at DESC"#
     )
     .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -1157,8 +1170,9 @@ pub async fn register_with_invite(invite_id: Uuid, username: String, password: S
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
     // 1. Verify invite
-    let invite = sqlx::query!(
-        "SELECT role, expires_at, used_at FROM user_invites WHERE id = $1",
+    let invite = sqlx::query_as!(
+        UserInvite,
+        r#"SELECT id, role, expires_at as "expires_at: chrono::DateTime<chrono::Utc>", used_at as "used_at: chrono::DateTime<chrono::Utc>" FROM user_invites WHERE id = $1"#,
         invite_id
     )
     .fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?

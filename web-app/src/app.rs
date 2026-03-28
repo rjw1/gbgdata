@@ -6,6 +6,7 @@ use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList
 use crate::components::rankings::Rankings;
 use crate::components::login::LoginForm;
 use crate::components::admin::AdminDashboard;
+use crate::components::my_visits::MyVisits;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
@@ -110,6 +111,8 @@ pub fn App() -> impl IntoView {
                         " | "
                         <A href="/near-me">"Near Me"</A>
                         " | "
+                        <A href="/my-visits">"My Visits"</A>
+                        " | "
                         <A href="/rankings">"Rankings"</A>
                         " | "
                         <A href="/about">"About"</A>
@@ -123,6 +126,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/login") view=LoginForm/>
                     <Route path=path!("/admin") view=AdminDashboard/>
                     <Route path=path!("/near-me") view=NearMe/>
+                    <Route path=path!("/my-visits") view=MyVisits/>
                     <Route path=path!("/rankings") view=Rankings/>
                     <Route path=path!("/about") view=About/>
                     <Route path=path!("/pub/:id") view=PubDetail/>

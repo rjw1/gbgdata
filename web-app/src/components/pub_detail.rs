@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use crate::server::get_pub_detail;
 use crate::components::stat_ring::StatRing;
 use crate::components::edit_pub::EditPub;
+use crate::components::log_visit::LogVisitModal;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -16,6 +17,17 @@ pub fn PubDetail() -> impl IntoView {
 
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
     let (show_edit, set_show_edit) = signal(false);
+    let (show_log_visit, set_show_log_visit) = signal(false);
+
+    let visit_status = Resource::new(
+        move || (id(), show_edit.get(), show_log_visit.get()), // Refresh when edit or log closes
+        move |(id, _, _)| async move {
+            match id {
+                Some(uuid) => crate::server::get_pub_visit_status(uuid).await,
+                None => Ok(false),
+            }
+        },
+    );
 
     let pub_data = Resource::new(
         move || (id(), show_edit.get()), // Refresh when edit closes
@@ -51,6 +63,9 @@ pub fn PubDetail() -> impl IntoView {
                                 <div class="pub-detail">
                                     <Show when=move || show_edit.get()>
                                         <EditPub pub_data=p_cloned.clone() on_close=Callback::new(move |_| set_show_edit.set(false)) />
+                                    </Show>
+                                    <Show when=move || show_log_visit.get()>
+                                        <LogVisitModal pub_id=id().unwrap() on_close=Callback::new(move |_| set_show_log_visit.set(false)) />
                                     </Show>
 
                                         <div class="pub-header">
@@ -125,6 +140,27 @@ pub fn PubDetail() -> impl IntoView {
                                                     .collect_view()}
                                             </div>
                                         </div>
+
+                                        <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
+                                            <div class="stats-card my-activity-card">
+                                                <h2>"My Activity"</h2>
+                                                <Suspense fallback=|| view! { <p>"Loading activity..."</p> }>
+                                                    {move || {
+                                                        visit_status.get().map(|res| {
+                                                            let has_visited = res.unwrap_or(false);
+                                                            view! {
+                                                                <p>
+                                                                    {if has_visited { "You have visited this pub." } else { "You haven't logged a visit here yet." }}
+                                                                </p>
+                                                                <button class="log-visit-btn" on:click=move |_| set_show_log_visit.set(true)>
+                                                                    "Log Visit"
+                                                                </button>
+                                                            }
+                                                        })
+                                                    }}
+                                                </Suspense>
+                                            </div>
+                                        </Show>
 
                                         <div class="external-links">
                                             <h3>"Links"</h3>
