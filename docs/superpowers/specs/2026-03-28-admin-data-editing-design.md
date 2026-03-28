@@ -1,100 +1,141 @@
-# Design Spec: Administrative Data Editing
+# Design Spec: User Engagement and Advanced Admin Features
 
 ## 1. Objective
-Add a secure administrative interface to allow authorized users to edit pub data and historical records.
+Enhance the GBG Data Explorer by introducing a "Normal User" role for visit tracking, a suggestion system for community data improvement, and advanced administrative tools like bulk editing and missing data reports.
 
 ## 2. Success Criteria
-- Secure authentication system with local user accounts.
-- Mandatory Multi-Factor Authentication (MFA) via TOTP.
-- Full CRUD (Create, Read, Update, Delete) capabilities for pubs and their Good Beer Guide (GBG) history.
-- Audit logging for all administrative changes.
-- CLI tool to bootstrap the first administrator.
-- Immediate update of statistics and rankings after data modification.
+- Support for "Normal Users" who can mark pubs as visited and manage their own visit history.
+- An "Invite-Only" registration system for both users and admins.
+- User-driven "Suggested Updates" with a side-by-side admin triage interface.
+- Advanced admin reports for identifying pubs with missing data (coordinates, external IDs, etc.).
+- Bulk editing capabilities for towns, outcodes, and regions.
+- Support for Flickr photos with mandatory CC license verification and attribution.
+- Passkey (WebAuthn) support for passwordless login.
+- Comprehensive visit exports in JSON, CSV, and Parquet.
+- Map-based visualization of a user's visit history.
 
 ## 3. Architecture
 
-### 3.1 Database Schema
-New tables and modifications to support authentication and auditing:
+### 3.1 Database Schema (New & Modified)
 
-#### `users` Table
+#### `users` Table (Modified)
+- `role`: VARCHAR(10) (e.g., 'admin', 'user')
+- `totp_setup_completed`: BOOLEAN (Default: FALSE)
+
+#### `user_invites` Table
 - `id`: UUID (Primary Key)
-- `username`: VARCHAR(50) (Unique)
-- `password_hash`: TEXT (Argon2id)
-- `totp_secret_enc`: BYTEA (Encrypted TOTP secret)
-- `recovery_codes_hash`: TEXT[] (Hashed one-time recovery codes)
-- `created_at`: TIMESTAMPTZ
-- `last_login`: TIMESTAMPTZ
+- `role`: VARCHAR(10) (e.g., 'admin', 'user')
+- `expires_at`: TIMESTAMPTZ
+- `created_by`: UUID (References users.id)
+- `used_at`: TIMESTAMPTZ (NULL if unused)
 
-#### `user_sessions` Table
-- Managed by `tower-sessions` with `sqlx-store` for persistence.
-
-#### `audit_log` Table
-- `id`: SERIAL (Primary Key)
+#### `user_visits` Table
+- `id`: UUID (Primary Key)
 - `user_id`: UUID (References users.id)
-- `action`: VARCHAR(20) (e.g., 'UPDATE_PUB', 'DELETE_PUB', 'EDIT_HISTORY')
-- `entity_type`: VARCHAR(20) (e.g., 'pub', 'gbg_history')
-- `entity_id`: UUID/INT
-- `old_value`: JSONB (State before change)
-- `new_value`: JSONB (State after change)
-- `timestamp`: TIMESTAMPTZ
+- `pub_id`: UUID (References pubs.id)
+- `visit_date`: DATE
+- `notes`: TEXT
+- UNIQUE (user_id, pub_id, visit_date)
+
+#### `suggested_updates` Table
+- `id`: UUID (Primary Key)
+- `pub_id`: UUID (References pubs.id)
+- `user_id`: UUID (References users.id)
+- `status`: VARCHAR(10) ('pending', 'approved', 'rejected')
+- `suggested_data`: JSONB (Stores changed fields)
+- `created_at`: TIMESTAMPTZ
+- `processed_at`: TIMESTAMPTZ
+- `processed_by`: UUID (References users.id)
+
+#### `pub_photos` Table
+- `id`: UUID (Primary Key)
+- `pub_id`: UUID (References pubs.id)
+- `user_id`: UUID (References users.id, uploader)
+- `flickr_id`: TEXT
+- `image_url`: TEXT
+- `owner_name`: TEXT
+- `license_type`: TEXT
+- `license_url`: TEXT
+- `original_url`: TEXT (Backlink to source)
+- `is_cc_licensed`: BOOLEAN
+
+#### `user_credentials` (Passkeys/WebAuthn)
+- `id`: UUID (Primary Key)
+- `user_id`: UUID (References users.id)
+- `credential_id`: BYTEA
+- `public_key`: BYTEA
+- `sign_count`: BIGINT
+- `transports`: TEXT[]
 
 ### 3.2 Security Model
-- **Password Hashing**: Argon2id with recommended parameters.
-- **2FA (MFA)**: Mandatory Time-based One-Time Password (TOTP) using `totp-rs`.
-- **Session Management**: Secure, HTTP-only cookies managed via `tower-sessions`.
-- **Encryption**: `pgcrypto` or a Rust-side encryption library for sensitive data like `totp_secret`.
-- **Access Control**: Server-side functions (`#[server]`) will verify session validity and user roles (initially all users are admins) before performing mutations.
+- **Invite System**: Registration requires a valid, unexpired token.
+- **Forced MFA**: New users are redirected to `/setup-mfa` after initial login if `totp_setup_completed` is FALSE.
+- **Passkeys**: WebAuthn standard for primary or secondary authentication.
+- **Role-Based Access**:
+    - `admin`: Full editing, bulk actions, triage suggestions, missing info reports.
+    - `user`: Suggesting updates, visit tracking, exports.
 
 ## 4. Components
 
-### 4.1 CLI Bootstrap (`import-tool`)
-- `import-tool create-admin --username <name> --password <pass>`
-- Generates a random salt and hashes the password.
-- Generates a TOTP secret and 5 recovery codes.
-- Outputs the TOTP setup URI (compatible with Google Authenticator, Authy, etc.).
-- Persists the new user to the database.
+### 4.1 User Features
+- **Visit Tracking**:
+    - **Pub Page**: Badge showing "Visited X times, last on YYYY-MM-DD". "Log Visit" button.
+    - **My Visits Page (`/my-visits`)**: List of all visits with filtering and a Map view (Leaflet).
+    - **Exports**: Buttons for CSV, JSON, and Parquet.
+- **Suggesting Updates**:
+    - "Suggest Update" button on pub detail pages.
+    - Form to edit basic pub info, with validation.
 
-### 4.2 Web Login Flow
-1. **Step 1**: Username and Password submission.
-2. **Step 2**: If credentials match, redirect to a TOTP challenge page.
-3. **Step 3**: On valid TOTP (or recovery code), create a session and redirect to the dashboard.
+### 4.2 Administrative Features
+- **Invite Management**: Admin UI to generate invite links.
+- **Triage UI (`/admin/suggestions`)**: Side-by-side comparison of current vs. suggested values.
+- **Missing Info Report (`/admin/reports/missing`)**: Filters for Region/Town/Outcode to find pubs with missing IDs, coords, or years.
+- **Bulk Edit**:
+    - **Dedicated Page**: Apply changes to all pubs in a Town/Outcode/Region.
+    - **Selection Mode**: Checkboxes in search results for multi-select and bulk action.
+- **Flickr Integration**:
+    - "Fetch from Flickr" button using ID/URL.
+    - Server-side validation of CC license via Flickr API.
+    - Manual entry fallback.
 
-### 4.3 Admin UI (`web-app`)
-- **Dashboard (`/admin`)**:
-    - List of recent audit log entries.
-    - User management (adding/removing other admins).
-- **Inline Pub Editing**:
-    - "Edit" button visible to authenticated admins on the Pub Detail page (`/pub/:id`).
-    - Opens a form to modify all fields in the `pubs` table (name, address, town, region, country_code, postcode, closed status, and coordinates).
-    - Map-based coordinate selector (clicking on the map to set lat/lon).
-- **History Management**:
-    - Grid view of all years (1973–Present) with checkboxes for presence in the GBG.
-    - Special handling for the 1972 trial year (as per project mandates, it remains excluded from stats but should be visible for completeness).
+### 4.3 General
+- **External Links**: Search links (Google, WhatPub, Untappd) when IDs are missing using specific query patterns (Name+Postcode for Google/WhatPub, Name+Town for Untappd).
+- **Google Place Finder**: Link to ID finder tool in the edit form.
 
 ## 5. Implementation Strategy
 
-### Phase 1: Authentication Core
-- Add dependencies to `web-app/Cargo.toml`.
-- Implement user and session tables.
-- Create CLI bootstrap command in `import-tool`.
-- Implement server-side login and 2FA verification logic.
+### Phase 1: Authentication & Roles
+- Migration for new tables and `role` column.
+- Update `auth.rs` and `server.rs` to support roles and TOTP setup flow.
+- Implement invite link generation and registration.
 
-### Phase 2: Administrative UI
-- Build the login and 2FA challenge components.
-- Create the `/admin` dashboard.
-- Implement the "Edit Pub" form and coordinate picker.
-- Implement the history management interface.
+### Phase 2: User Engagement (Visits & Suggestions)
+- Implement `user_visits` tracking and "My Visits" page (List + Map).
+- Implement "Suggest Update" flow and admin triage UI.
+- Implement visit exports (CSV, JSON, Parquet).
 
-### Phase 3: Audit & Integrity
-- Integrate audit logging into all mutation functions.
-- Ensure `pub_stats` view is refreshed after any data change.
-- Add end-to-end tests for the admin flow.
+### Phase 3: Advanced Admin Tools
+- Implement Flickr photo integration with CC license check.
+- Implement Missing Data reports (page + inline icons).
+- Implement Bulk Editing (dedicated page + list selection).
+
+### Phase 4: Passkeys (WebAuthn)
+- Integrate WebAuthn (e.g., using `webauthn-rs`).
+- Implement registration and login flows.
+
+### Phase 5: Testing, ADRs, and Docs
+- **ADRs**: Document significant architectural decisions for Passkeys, Bulk Editing, and the Suggestion System.
+- **Tests**: 
+    - Unit tests for visit exports and Flickr API parsing.
+    - Integration tests for role-based access control.
+    - Playwright end-to-end tests for the visit tracking and suggestion flows.
+- **Docs**: Update `docs/usage.md` and `docs/hosting.md` with user registration and administrative features.
 
 ## 6. Risks & Constraints
-- **Security**: Hardening the session management is critical.
-- **Complexity**: Synchronizing coordinates between the form and the map component.
-- **Performance**: Frequent `REFRESH MATERIALIZED VIEW CONCURRENTLY pub_stats` should be handled carefully to avoid locking.
+- **Flickr API**: Requires an API key and handling rate limits.
+- **Passkey Complexity**: WebAuthn can be tricky to implement correctly across all browsers.
+- **Bulk Actions Performance**: Large updates could trigger long `REFRESH MATERIALIZED VIEW` times.
 
 ## 7. Open Questions
-- Should we support bulk editing (e.g., closing all pubs in a town at once)? *Decision: No, focused on individual pub accuracy for now.*
-- How should recovery codes be handled after use? *Decision: They are one-time use and should be removed from the database once used.*
+- Should "Normal Users" be able to delete their own visit history? *Decision: Yes, on the My Visits page.*
+- What happens if an admin modifies a pub while a suggestion is pending? *Decision: The triage view will show the updated "Current" value.*

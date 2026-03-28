@@ -1,0 +1,26 @@
+services:
+  nominatim:
+    image: mediagis/nominatim:4.4
+    container_name: nominatim-standalone
+    restart: always
+    shm_size: 4gb # Crucial for Nominatim performance
+    ports:
+      - "8080:8080"
+    environment:
+      - NOMINATIM_POSTGRESQL_SHARED_BUFFERS=2GB
+      - NOMINATIM_POSTGRESQL_MAINTENANCE_WORK_MEM=4GB
+    volumes:
+      - nominatim-data:/var/lib/postgresql/14/main
+      - /mnt/tank/backups/nominatim:/backups:ro # CHANGE THIS to your local backup path
+
+    # --- MAINTENANCE MODE ---
+    # Override the entrypoint to prevent automatic initialization
+    entrypoint: /bin/bash
+    command: -c "sleep infinity"
+
+    # --- PRODUCTION MODE ---
+    # Once you have imported your data and created the 'import-finished' file,
+    # COMMENT OUT the entrypoint and command lines above to run the API normally.
+
+volumes:
+  nominatim-data:
