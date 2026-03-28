@@ -1828,8 +1828,32 @@ pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), Ser
     let session = extract::<Session>().await?;
     let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if admin.role != "admin" {
+    if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    // Only owners can promote to owner or change owner's role
+    let current_role = sqlx::query_scalar!("SELECT role FROM users WHERE id = $1", user_id)
+        .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if (new_role == "owner" || current_role == "owner") && admin.role != "owner" {
+        return Err(ServerFnError::new("Only the owner can transfer ownership"));
+    }
+
+    // If demoting an admin, ensure they aren't the last one
+    if new_role != "admin" && new_role != "owner" && current_role == "admin" {
+        let admin_count = sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
+            .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
+        
+        if admin_count <= 1 {
+            return Err(ServerFnError::new("Cannot demote the last administrator"));
+        }
+    }
+
+    // If transferring ownership, demote old owner to admin
+    if new_role == "owner" {
+        sqlx::query!("UPDATE users SET role = 'admin' WHERE role = 'owner'")
+            .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
     }
 
     sqlx::query!("UPDATE users SET role = $1 WHERE id = $2", new_role, user_id)
@@ -1855,7 +1879,7 @@ pub async fn reset_user_2fa(user_id: Uuid) -> Result<(), ServerFnError> {
     let session = extract::<Session>().await?;
     let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if admin.role != "admin" {
+    if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1888,7 +1912,7 @@ pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
     let session = extract::<Session>().await?;
     let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if admin.role != "admin" {
+    if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1896,7 +1920,23 @@ pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
         return Err(ServerFnError::new("You cannot delete yourself"));
     }
 
-    // Delete related data first (though DB schema should handle CASCADE)
+    let target_role = sqlx::query_scalar!("SELECT role FROM users WHERE id = $1", user_id)
+        .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if target_role == "owner" {
+        return Err(ServerFnError::new("You cannot delete the owner. Transfer the role first."));
+    }
+
+    if target_role == "admin" {
+        let admin_count = sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
+            .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
+        
+        if admin_count <= 1 {
+            return Err(ServerFnError::new("Cannot delete the last administrator"));
+        }
+    }
+
+    // Delete related data
     sqlx::query!("DELETE FROM user_visits WHERE user_id = $1", user_id)
         .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
     sqlx::query!("DELETE FROM user_credentials WHERE user_id = $1", user_id)

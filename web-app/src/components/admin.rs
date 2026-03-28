@@ -236,6 +236,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                         on:input=move |ev| set_user_search.set(event_target_value(&ev)) />
                                     <select on:change=move |ev| set_role_filter.set(event_target_value(&ev))>
                                         <option value="all">"All Roles"</option>
+                                        <option value="owner">"Owner"</option>
                                         <option value="admin">"Admin"</option>
                                         <option value="user">"User"</option>
                                     </select>
@@ -267,6 +268,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                             new_role: event_target_value(&ev),
                                                                         });
                                                                     }>
+                                                                        <option value="owner" selected=current_role == "owner">"Owner"</option>
                                                                         <option value="admin" selected=current_role == "admin">"Admin"</option>
                                                                         <option value="user" selected=current_role == "user">"User"</option>
                                                                     </select>
