@@ -74,7 +74,7 @@ pub fn SuggestUpdateModal(pub_data: PubDetail, on_close: Callback<()>) -> impl I
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>"Suggest an Update"</h3>
-                    <button class="close-btn" on:click=move |_| on_close.run(())>"×"</button>
+                    <button class="btn btn-ghost close-btn" on:click=move |_| on_close.run(())>"×"</button>
                 </div>
 
                 <div class="suggestion-wizard">
@@ -172,10 +172,10 @@ pub fn SuggestUpdateModal(pub_data: PubDetail, on_close: Callback<()>) -> impl I
                             </div>
 
                             <div class="form-actions">
-                                <button type="submit" class="save-btn" disabled=suggest_action.pending()>
+                                <button type="submit" class="btn btn-primary" disabled=suggest_action.pending()>
                                     {move || if suggest_action.pending().get() { "Submitting..." } else { "Submit Suggestion" }}
                                 </button>
-                                <button type="button" class="cancel-btn" on:click=move |_| set_category.set(SuggestionCategory::Menu)>"Back"</button>
+                                <button type="button" class="btn btn-ghost" on:click=move |_| set_category.set(SuggestionCategory::Menu)>"Back"</button>
                             </div>
                         </form>
                     </Show>

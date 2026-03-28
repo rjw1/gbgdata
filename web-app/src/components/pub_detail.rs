@@ -120,13 +120,13 @@ pub fn PubDetail() -> impl IntoView {
                                                         view! {
                                                             <div class="admin-suggestion-banner">
                                                                 <p>"User " <strong>{s.username}</strong> " suggested an update."</p>
-                                                                <button on:click=move |_| {
+                                                                <button class="btn btn-primary" on:click=move |_| {
                                                                     process_action.dispatch(crate::server::ProcessSuggestedUpdate {
                                                                         suggestion_id: s.id,
                                                                         approve: true,
                                                                     });
                                                                 }>"Approve"</button>
-                                                                <button class="delete-btn" on:click=move |_| {
+                                                                <button class="btn btn-danger" on:click=move |_| {
                                                                     process_action.dispatch(crate::server::ProcessSuggestedUpdate {
                                                                         suggestion_id: s.id,
                                                                         approve: false,
@@ -145,10 +145,10 @@ pub fn PubDetail() -> impl IntoView {
                                             <h1>{name.clone()}</h1>
                                             <div class="header-actions">
                                                 <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
-                                                    <button class="suggest-btn" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
+                                                    <button class="btn btn-secondary" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
                                                 </Show>
                                                 <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
-                                                    <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
+                                                    <button class="btn btn-secondary" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
                                                 </Show>
                                             </div>
 
@@ -231,7 +231,7 @@ pub fn PubDetail() -> impl IntoView {
                                                                 <p>
                                                                     {if has_visited { "You have visited this pub." } else { "You haven't logged a visit here yet." }}
                                                                 </p>
-                                                                <button class="log-visit-btn" on:click=move |_| set_show_log_visit.set(true)>
+                                                                <button class="btn btn-secondary" on:click=move |_| set_show_log_visit.set(true)>
                                                                     "Log Visit"
                                                                 </button>
                                                             }

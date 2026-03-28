@@ -29,7 +29,7 @@ pub fn LogVisitModal(pub_id: Uuid, on_close: Callback<()>) -> impl IntoView {
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>"Log Visit"</h3>
-                    <button class="close-btn" on:click=move |_| on_close.run(())>"×"</button>
+                    <button class="btn btn-ghost close-btn" on:click=move |_| on_close.run(())>"×"</button>
                 </div>
                 <form on:submit=on_submit class="edit-form">
                     <div class="form-grid">
@@ -43,10 +43,10 @@ pub fn LogVisitModal(pub_id: Uuid, on_close: Callback<()>) -> impl IntoView {
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="save-btn" disabled=log_action.pending()>
+                        <button type="submit" class="btn btn-primary" disabled=log_action.pending()>
                             {move || if log_action.pending().get() { "Saving..." } else { "Save Visit" }}
                         </button>
-                        <button type="button" class="cancel-btn" on:click=move |_| on_close.run(())>"Cancel"</button>
+                        <button type="button" class="btn btn-ghost" on:click=move |_| on_close.run(())>"Cancel"</button>
                     </div>
                     {move || log_action.value().get().map(|v| {
                         if let Err(e) = v {

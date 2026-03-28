@@ -114,7 +114,7 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>"Edit Pub: " {move || pub_data.name.clone()}</h3>
-                    <button class="close-btn" on:click=move |_| on_close.run(())>"×"</button>
+                    <button class="btn btn-ghost close-btn" on:click=move |_| on_close.run(())>"×"</button>
                 </div>
                 <form on:submit=on_submit class="edit-form">
                     <div class="form-grid">
@@ -173,7 +173,7 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                             <div class="input-with-button">
                                 <input type="text" value=move || google_maps_id.get().unwrap_or_default() 
                                     on:input=move |ev| set_google_maps_id.set(Some(event_target_value(&ev))) />
-                                <button type="button" class="helper-btn" on:click=move |_| {
+                                <button type="button" class="btn btn-secondary btn-sm" on:click=move |_| {
                                     let _ = window().open_with_url_and_target("https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder", "_blank");
                                 }>"Find ID"</button>
                             </div>
@@ -208,7 +208,7 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                             <label>"Flickr URL or Photo ID"</label>
                             <div class="input-with-button">
                                 <input type="text" value=flickr_url on:input=move |ev| set_flickr_url.set(event_target_value(&ev)) placeholder="https://www.flickr.com/photos/..." />
-                                <button type="button" on:click=on_fetch_flickr disabled=fetch_flickr.pending()>
+                                <button type="button" class="btn btn-secondary btn-sm" on:click=on_fetch_flickr disabled=fetch_flickr.pending()>
                                     {move || if fetch_flickr.pending().get() { "Fetching..." } else { "Fetch Details" }}
                                 </button>
                             </div>
@@ -258,10 +258,10 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="save-btn" disabled=update_action.pending()>
+                        <button type="submit" class="btn btn-primary" disabled=update_action.pending()>
                             {move || if update_action.pending().get() { "Saving..." } else { "Save Changes" }}
                         </button>
-                        <button type="button" class="cancel-btn" on:click=move |_| on_close.run(())>"Cancel"</button>
+                        <button type="button" class="btn btn-ghost" on:click=move |_| on_close.run(())>"Cancel"</button>
                     </div>
                     {move || update_action.value().get().map(|v| {
                         if let Err(e) = v {
