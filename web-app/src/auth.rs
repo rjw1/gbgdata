@@ -5,6 +5,8 @@ use uuid::Uuid;
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    pub role: String,
+    pub totp_setup_completed: bool,
 }
 
 #[cfg(feature = "ssr")]

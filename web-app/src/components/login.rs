@@ -42,7 +42,7 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let user_data = sqlx::query!(
-        "SELECT id, username, totp_secret_enc, recovery_codes_hash FROM users WHERE id = $1",
+        "SELECT id, username, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash FROM users WHERE id = $1",
         user_id
     )
     .fetch_one(&pool)
@@ -79,6 +79,8 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
         session::login(&session, &User {
             id: user_data.id,
             username: user_data.username,
+            role: user_data.role,
+            totp_setup_completed: user_data.totp_setup_completed,
         }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
     }
 

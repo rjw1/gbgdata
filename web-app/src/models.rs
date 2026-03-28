@@ -3,6 +3,15 @@ use uuid::Uuid;
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct User {
+    pub id: Uuid,
+    pub username: String,
+    pub role: String,
+    pub totp_setup_completed: bool,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PubSummary {
     pub id: Uuid,
     pub name: String,
@@ -88,6 +97,54 @@ pub struct RegionDetails {
     pub name: String,
     pub towns: Vec<TownSummary>,
     pub outcodes: Vec<OutcodeSummary>,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisitRecord {
+    pub id: Uuid,
+    pub pub_id: Uuid,
+    pub pub_name: String,
+    pub visit_date: chrono::NaiveDate,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FlickrPhotoInfo {
+    pub flickr_id: String,
+    pub title: String,
+    pub owner_name: String,
+    pub image_url: String,
+    pub original_url: String,
+    pub license_type: String,
+    pub license_url: String,
+    pub is_cc_licensed: bool,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PubPhoto {
+    pub id: Uuid,
+    pub pub_id: Uuid,
+    pub flickr_id: Option<String>,
+    pub image_url: String,
+    pub owner_name: String,
+    pub license_type: String,
+    pub license_url: String,
+    pub is_cc_licensed: bool,
+}
+
+#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SuggestedUpdate {
+    pub id: Uuid,
+    pub pub_id: Uuid,
+    pub pub_name: String,
+    pub user_id: Uuid,
+    pub username: String,
+    pub status: String,
+    pub suggested_data: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
