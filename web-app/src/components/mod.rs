@@ -10,6 +10,7 @@ pub mod setup_2fa;
 pub mod profile;
 pub mod admin;
 pub mod edit_pub;
+pub mod suggest_update;
 pub mod explorer;
 pub mod map;
 pub mod rankings;

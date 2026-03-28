@@ -3,6 +3,7 @@ use crate::server::get_pub_detail;
 use crate::components::stat_ring::StatRing;
 use crate::components::edit_pub::EditPub;
 use crate::components::log_visit::LogVisitModal;
+use crate::components::suggest_update::SuggestUpdateModal;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -18,6 +19,7 @@ pub fn PubDetail() -> impl IntoView {
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
     let (show_edit, set_show_edit) = signal(false);
     let (show_log_visit, set_show_log_visit) = signal(false);
+    let (show_suggest, set_show_suggest) = signal(false);
 
     let visit_status = Resource::new(
         move || (id(), show_edit.get(), show_log_visit.get()), // Refresh when edit or log closes
@@ -95,6 +97,7 @@ pub fn PubDetail() -> impl IntoView {
                             let untappd = p.untappd_id.clone();
                             let untappd_verified = p.untappd_verified;
                             let p_cloned = p.clone();
+                            let p_cloned_2 = p.clone();
 
                             view! {
                                 <div class="pub-detail">
@@ -103,6 +106,9 @@ pub fn PubDetail() -> impl IntoView {
                                     </Show>
                                     <Show when=move || show_log_visit.get()>
                                         <LogVisitModal pub_id=id().unwrap() on_close=Callback::new(move |_| set_show_log_visit.set(false)) />
+                                    </Show>
+                                    <Show when=move || show_suggest.get()>
+                                        <SuggestUpdateModal pub_data=p_cloned_2.clone() on_close=Callback::new(move |_| set_show_suggest.set(false)) />
                                     </Show>
 
                                     <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
@@ -137,9 +143,14 @@ pub fn PubDetail() -> impl IntoView {
 
                                         <div class="pub-header">
                                             <h1>{name.clone()}</h1>
-                                            <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
-                                                <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
-                                            </Show>
+                                            <div class="header-actions">
+                                                <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
+                                                    <button class="suggest-btn" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
+                                                </Show>
+                                                <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                                                    <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
+                                                </Show>
+                                            </div>
                                         </div>
                                         <div class="pub-info">
                                             <p class="address">{address}</p>
