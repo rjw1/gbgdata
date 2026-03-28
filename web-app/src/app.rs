@@ -73,9 +73,9 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <AutoReload options=options.clone() />
                 <HydrationScripts options/>
                 <Meta name="description" content="Good Beer Guide Pub Explorer"/>
-                <Meta name="robots" content="noindex, nofollow, noarchive"/>
-                <Meta name="googlebot" content="noindex, nofollow, noarchive"/>
-                <Meta name="bingbot" content="noindex, nofollow, noarchive"/>
+                <Meta name="robots" content="noindex, nofollow, noarchive, noai, noimageai"/>
+                <Meta name="googlebot" content="noindex, nofollow, noarchive, noai, noimageai"/>
+                <Meta name="bingbot" content="noindex, nofollow, noarchive, noai, noimageai"/>
                 <link rel="manifest" href="/assets/manifest.json"/>
                 <script>
                     "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/assets/sw.js'); }); }"

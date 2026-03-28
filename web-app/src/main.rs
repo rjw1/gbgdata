@@ -85,7 +85,7 @@ async fn main() {
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static("noindex, nofollow, noarchive"),
+            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("x-frame-options"),
