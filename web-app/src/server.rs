@@ -1080,14 +1080,59 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
 
     let status = if approve { "approved" } else { "rejected" };
 
+    if approve {
+        let suggestion = sqlx::query!(
+            "SELECT pub_id, suggested_data FROM suggested_updates WHERE id = $1",
+            suggestion_id
+        ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let data = suggestion.suggested_data;
+        
+        // Patch the pub record
+        sqlx::query!(
+            "UPDATE pubs SET 
+                name = COALESCE($1, name),
+                address = COALESCE($2, address),
+                town = COALESCE($3, town),
+                region = COALESCE($4, region),
+                postcode = COALESCE($5, postcode),
+                closed = COALESCE($6, closed),
+                whatpub_id = COALESCE($7, whatpub_id),
+                google_maps_id = COALESCE($8, google_maps_id),
+                untappd_id = COALESCE($9, untappd_id)
+             WHERE id = $10",
+            data["name"].as_str(),
+            data["address"].as_str(),
+            data["town"].as_str(),
+            data["region"].as_str(),
+            data["postcode"].as_str(),
+            data["closed"].as_bool(),
+            data["whatpub_id"].as_str(),
+            data["google_maps_id"].as_str(),
+            data["untappd_id"].as_str(),
+            suggestion.pub_id
+        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Update years if present
+        if let Some(years) = data["years"].as_array() {
+            let years_vec: Vec<i32> = years.iter().filter_map(|v| v.as_i64().map(|y| y as i32)).collect();
+            
+            // This is simple but effective: clear and re-insert
+            sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1", suggestion.pub_id)
+                .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+                
+            for year in years_vec {
+                sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)", suggestion.pub_id, year)
+                    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            }
+        }
+    }
+
     sqlx::query!(
         "UPDATE suggested_updates SET status = $1, processed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3",
         status, user.id, suggestion_id
     )
     .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-
-    // If approved, you might want to automatically apply changes, but usually, an admin will review and edit.
-    // For now, we just mark it as processed.
 
     Ok(())
 }
@@ -1155,13 +1200,12 @@ pub async fn bulk_update_pubs(
     // Since this is complex to do generically in sqlx without a lot of boilerplate,
     // I'll stick to a more restricted but safe implementation if needed.
     
-    let res = sqlx::query!("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
+    let res = sqlx::query::<sqlx::Postgres>("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
                            WHERE (region = $3 OR $3 IS NULL) 
                              AND (town = $4 OR $4 IS NULL) 
-                             AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)",
-        closed, untappd_verified, region, town, outcode
-    )
-    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+                             AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)")
+        .bind(closed).bind(untappd_verified).bind(region).bind(town).bind(outcode)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(res.rows_affected())
 }
