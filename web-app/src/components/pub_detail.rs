@@ -49,6 +49,33 @@ pub fn PubDetail() -> impl IntoView {
         },
     );
 
+    let process_action = ServerAction::<crate::server::ProcessSuggestedUpdate>::new();
+
+    let pending_suggestions = Memo::new(move |_| {
+        let (id, _) = (id(), show_edit.get());
+        let process_finished = process_action.value().get();
+        (id, process_finished)
+    });
+
+    let pending_suggestions_res = Resource::new(
+        move || pending_suggestions.get(),
+        |(id, _)| async move {
+            if let Some(uuid) = id {
+                let all = crate::server::get_suggested_updates(Some("pending".to_string())).await?;
+                Ok(all.into_iter().filter(|s| s.pub_id == uuid).collect::<Vec<_>>())
+            } else {
+                Ok(vec![])
+            }
+        }
+    );
+
+    Effect::new(move |_| {
+        if process_action.value().get().is_some() {
+            pending_suggestions_res.refetch();
+            pub_data.refetch();
+        }
+    });
+
     view! {
         <div class="pub-detail-container">
             <Suspense fallback=move || view! { <p>"Loading pub details..."</p> }>
@@ -76,6 +103,36 @@ pub fn PubDetail() -> impl IntoView {
                                     </Show>
                                     <Show when=move || show_log_visit.get()>
                                         <LogVisitModal pub_id=id().unwrap() on_close=Callback::new(move |_| set_show_log_visit.set(false)) />
+                                    </Show>
+
+                                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                                        <Suspense fallback=|| ()>
+                                            {move || pending_suggestions_res.get().map(|res: Result<Vec<crate::models::SuggestedUpdate>, ServerFnError>| {
+                                                match res {
+                                                    Ok(list) if !list.is_empty() => {
+                                                        let s = list[0].clone();
+                                                        view! {
+                                                            <div class="admin-suggestion-banner">
+                                                                <p>"User " <strong>{s.username}</strong> " suggested an update."</p>
+                                                                <button on:click=move |_| {
+                                                                    process_action.dispatch(crate::server::ProcessSuggestedUpdate {
+                                                                        suggestion_id: s.id,
+                                                                        approve: true,
+                                                                    });
+                                                                }>"Approve"</button>
+                                                                <button class="delete-btn" on:click=move |_| {
+                                                                    process_action.dispatch(crate::server::ProcessSuggestedUpdate {
+                                                                        suggestion_id: s.id,
+                                                                        approve: false,
+                                                                    });
+                                                                }>"Reject"</button>
+                                                            </div>
+                                                        }.into_any()
+                                                    },
+                                                    _ => ().into_any()
+                                                }
+                                            })}
+                                        </Suspense>
                                     </Show>
 
                                         <div class="pub-header">

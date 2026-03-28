@@ -241,7 +241,10 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
-                  s.current_streak
+                  s.current_streak,
+                  p.whatpub_id,
+                  p.google_maps_id,
+                  p.untappd_id
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id"#
     );
@@ -316,7 +319,10 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>, open_only: Option<b
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
-                  s.current_streak
+                  s.current_streak,
+                  p.whatpub_id,
+                  p.google_maps_id,
+                  p.untappd_id
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE (p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1)
@@ -357,7 +363,10 @@ pub async fn get_ranked_pubs(sort: Option<SortMode>, open_only: Option<bool>) ->
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
-                  s.current_streak
+                  s.current_streak,
+                  p.whatpub_id,
+                  p.google_maps_id,
+                  p.untappd_id
            FROM pubs p
            JOIN pub_stats s ON p.id = s.pub_id
            {}
@@ -445,7 +454,10 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Optio
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
-                  s.current_streak
+                  s.current_streak,
+                  p.whatpub_id,
+                  p.google_maps_id,
+                  p.untappd_id
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
            WHERE p.location IS NOT NULL 
@@ -1469,6 +1481,25 @@ pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Resu
     }
 }
 
+#[server(GetMissingDataReports, "/api")]
+pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSummary>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    let query = match report_type.as_str() {
+        "coords" => "SELECT * FROM pubs WHERE lat IS NULL OR lon IS NULL LIMIT 100",
+        "ids" => "SELECT * FROM pubs WHERE whatpub_id IS NULL OR google_maps_id IS NULL OR untappd_id IS NULL LIMIT 100",
+        "closed" => "SELECT p.* FROM pubs p JOIN pub_stats s ON p.id = s.pub_id WHERE p.closed = true AND s.latest_year >= 2024 LIMIT 100",
+        _ => return Err(ServerFnError::new("Invalid report type")),
+    };
+
+    let pubs = sqlx::query_as::<_, PubSummary>(query)
+        .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(pubs)
+}
+
 #[server(GetMyPasskeys, "/api")]
 pub async fn get_my_passkeys() -> Result<Vec<crate::models::UserCredential>, ServerFnError> {
     use sqlx::PgPool;
@@ -1488,6 +1519,61 @@ pub async fn get_my_passkeys() -> Result<Vec<crate::models::UserCredential>, Ser
     ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(passkeys)
+}
+
+#[server(BulkUpdatePubsList, "/api")]
+pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Only admins can perform bulk updates"));
+    }
+
+    for id in ids {
+        match action.as_str() {
+            "mark_closed" => {
+                let is_closed = value == "true";
+                sqlx::query!("UPDATE pubs SET closed = $1 WHERE id = $2", is_closed, id)
+                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+                
+                sqlx::query!(
+                    "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+                    user.id, format!("bulk_update:closed={}", is_closed), "pub", id
+                ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+            },
+            "add_year" => {
+                let year: i32 = value.parse().map_err(|_| ServerFnError::new("Invalid year"))?;
+                sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2) ON CONFLICT DO NOTHING", id, year)
+                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+                
+                sqlx::query!(
+                    "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+                    user.id, format!("bulk_update:add_year={}", year), "pub", id
+                ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+            },
+            "remove_year" => {
+                let year: i32 = value.parse().map_err(|_| ServerFnError::new("Invalid year"))?;
+                sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1 AND year = $2", id, year)
+                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+                
+                sqlx::query!(
+                    "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+                    user.id, format!("bulk_update:remove_year={}", year), "pub", id
+                ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+            },
+            _ => return Err(ServerFnError::new("Unsupported bulk action")),
+        }
+    }
+
+    Ok(())
 }
 
 #[server(DeletePasskey, "/api")]

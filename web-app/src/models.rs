@@ -26,6 +26,9 @@ pub struct PubSummary {
     pub latest_year: Option<i32>,
     pub total_years_rank: Option<i64>,
     pub current_streak: Option<i32>,
+    pub whatpub_id: Option<String>,
+    pub google_maps_id: Option<String>,
+    pub untappd_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
