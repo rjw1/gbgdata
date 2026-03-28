@@ -1,5 +1,7 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, TownSummary, OutcodeSummary, YearSummary, SortMode};
+use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode};
+#[cfg(feature = "ssr")]
+use crate::models::{TownSummary, OutcodeSummary};
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]

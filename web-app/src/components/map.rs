@@ -25,13 +25,13 @@ pub fn MapView(
                 let has_map = container.has_attribute("data-map-initialized");
                 
                 if !has_map {
-                    let map_options = js_sys::Object::new();
+                    let _map_options = js_sys::Object::new();
                     let map = js_sys::Reflect::get(&l, &JsValue::from_str("map")).unwrap()
                         .dyn_into::<js_sys::Function>().unwrap()
                         .call1(&JsValue::NULL, &container.clone().into()).unwrap();
                     
                     // Set view to first pub or center of UK
-                    let first = list.first();
+                    let _first = list.first();
                     let lat = 54.0;
                     let lon = -2.0;
                     let zoom = 6;
@@ -55,7 +55,7 @@ pub fn MapView(
                     // Add markers for pubs with coordinates
                     let marker_fn = js_sys::Reflect::get(&l, &JsValue::from_str("marker")).unwrap()
                         .dyn_into::<js_sys::Function>().unwrap();
-                    let bind_popup = js_sys::Reflect::get(&marker_fn, &JsValue::from_str("bindPopup")).unwrap(); // This is wrong, it's on the instance
+                    let _bind_popup = js_sys::Reflect::get(&marker_fn, &JsValue::from_str("bindPopup")).ok(); // This is wrong, it's on the instance
 
                     for p in list.iter().filter(|p| p.lat.is_some() && p.lon.is_some()) {
                         let lat = p.lat.unwrap();
