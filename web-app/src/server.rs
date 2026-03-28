@@ -1492,7 +1492,7 @@ pub async fn register_user(invite_id: Uuid, username: String, password: String) 
 }
 
 #[server(GetAuditLogs, "/api")]
-pub async fn get_audit_logs() -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
+pub async fn get_audit_logs(search: String, limit: i64) -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     use tower_sessions::Session;
@@ -1510,15 +1510,23 @@ pub async fn get_audit_logs() -> Result<Vec<crate::models::AuditLogEntry>, Serve
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
-    let logs = sqlx::query_as::<_, AuditLogEntry>(
-        r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
+    let limit = limit.min(500).max(1); // Cap at 500
+
+    let mut query = String::from(r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
            FROM audit_log l
            JOIN users u ON l.user_id = u.id
-           ORDER BY l.timestamp DESC LIMIT 50"#
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+           WHERE 1=1"#);
+    
+    if !search.is_empty() {
+        query.push_str(&format!(" AND (u.username ILIKE '%{0}%' OR l.action ILIKE '%{0}%' OR l.entity_type ILIKE '%{0}%')", search.replace("'", "''")));
+    }
+    
+    query.push_str(&format!(" ORDER BY l.timestamp DESC LIMIT {}", limit));
+
+    let logs = sqlx::query_as::<sqlx::Postgres, AuditLogEntry>(&query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(logs)
 }

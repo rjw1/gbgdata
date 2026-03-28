@@ -6,7 +6,14 @@ use crate::components::edit_pub::EditPub;
 pub fn AdminDashboard() -> impl IntoView {
     let logout_action = ServerAction::<Logout>::new();
     let user = Resource::new(|| (), |_| get_current_user());
-    let audit_logs = Resource::new(|| (), |_| get_audit_logs());
+    
+    let (audit_search, set_audit_search) = signal(String::new());
+    let (audit_limit, set_audit_limit) = signal(50i64);
+
+    let audit_logs = Resource::new(
+        move || (audit_search.get(), audit_limit.get()),
+        |(search, limit)| async move { get_audit_logs(search, limit).await }
+    );
     
     let (active_tab, set_active_tab) = signal(String::from("activity"));
     let (editing_pub_id, set_editing_pub_id) = signal(None::<uuid::Uuid>);
@@ -135,6 +142,16 @@ pub fn AdminDashboard() -> impl IntoView {
 
                             <Show when=move || active_tab.get() == "activity">
                                 <h3>"Recent Activity"</h3>
+                                <div class="list-controls">
+                                    <input type="text" placeholder="Search activity..." 
+                                        on:input=move |ev| set_audit_search.set(event_target_value(&ev)) />
+                                    <select on:change=move |ev| set_audit_limit.set(event_target_value(&ev).parse().unwrap_or(50))>
+                                        <option value="50">"Show 50"</option>
+                                        <option value="100">"Show 100"</option>
+                                        <option value="200">"Show 200"</option>
+                                        <option value="500">"Show 500"</option>
+                                    </select>
+                                </div>
                                 <Transition fallback=move || view! { <p>"Loading logs..."</p> }>
                                     {move || match audit_logs.get() {
                                         Some(Ok(logs)) => view! {
