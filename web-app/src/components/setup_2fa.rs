@@ -57,29 +57,31 @@ pub fn Setup2FA() -> impl IntoView {
                                         <p class="secret-text">"Secret: " <code>{secret}</code></p>
                                         <p class="url-text">"URL: " <small>{url}</small></p>
                                     </div>
-                                    <div class="verify-section">
-                                        <h3>"Verify Setup"</h3>
-                                        <p>"Enter the 6-digit code from your authenticator app."</p>
-                                        <ActionForm action=verify_action>
-                                            <input type="hidden" name="user_id" value=move || {
-                                                user.get().and_then(|u| u.ok().flatten()).map(|u| u.id.to_string()).unwrap_or_default()
-                                            } />
-                                            <div class="form-group">
-                                                <input type="text" name="code" placeholder="000000" 
-                                                    on:input=move |ev| set_code.set(event_target_value(&ev)) required />
-                                            </div>
-                                            <button type="submit" class="btn btn-primary btn-block" disabled=verify_action.pending()>
-                                                {move || if verify_action.pending().get() { "Verifying..." } else { "Enable 2FA" }}
-                                            </button>
-                                            {move || verify_action.value().get().map(|v| {
-                                                if let Ok(false) = v {
-                                                    view! { <p class="error">"Invalid code. Please try again."</p> }.into_any()
-                                                } else {
-                                                    ().into_any()
-                                                }
-                                            })}
-                                        </ActionForm>
-                                    </div>
+                                    <Suspense fallback=|| ()>
+                                        <div class="verify-section">
+                                            <h3>"Verify Setup"</h3>
+                                            <p>"Enter the 6-digit code from your authenticator app."</p>
+                                            <ActionForm action=verify_action>
+                                                <input type="hidden" name="user_id" value=move || {
+                                                    user.get().and_then(|u| u.ok().flatten()).map(|u| u.id.to_string()).unwrap_or_default()
+                                                } />
+                                                <div class="form-group">
+                                                    <input type="text" name="code" placeholder="000000" 
+                                                        on:input=move |ev| set_code.set(event_target_value(&ev)) required />
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-block" disabled=verify_action.pending()>
+                                                    {move || if verify_action.pending().get() { "Verifying..." } else { "Enable 2FA" }}
+                                                </button>
+                                                {move || verify_action.value().get().map(|v| {
+                                                    if let Ok(false) = v {
+                                                        view! { <p class="error">"Invalid code. Please try again."</p> }.into_any()
+                                                    } else {
+                                                        ().into_any()
+                                                    }
+                                                })}
+                                            </ActionForm>
+                                        </div>
+                                    </Suspense>
                                 </div>
                             }.into_any()
                         },
