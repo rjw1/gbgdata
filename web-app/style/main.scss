@@ -14,7 +14,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --forest-green: #4ea38a;
+    --forest-green: #74c0a8;
     --amber: #ffcc33;
     --off-white: #121212;
     --dark-text: #e0e0e0;
@@ -26,7 +26,7 @@
 }
 
 [data-theme="dark"] {
-  --forest-green: #4ea38a;
+  --forest-green: #74c0a8;
   --amber: #ffcc33;
   --off-white: #121212;
   --dark-text: #e0e0e0;
@@ -92,6 +92,14 @@ nav {
 
   &:hover {
     background-color: var(--track);
+  }
+}
+
+a {
+  color: var(--forest-green);
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
   }
 }
 
