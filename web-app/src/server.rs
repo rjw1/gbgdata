@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode};
 #[cfg(feature = "ssr")]
 use crate::models::{TownSummary, OutcodeSummary};
+use crate::auth::User;
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
@@ -445,4 +446,148 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         latest_year: row.get("latest_year"),
         years,
     })
+}
+
+#[server(UpdatePub, "/api")]
+pub async fn update_pub(
+    id: Uuid,
+    name: String,
+    address: String,
+    town: String,
+    region: String,
+    country_code: Option<String>,
+    postcode: String,
+    closed: bool,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    untappd_id: Option<String>,
+    google_maps_id: Option<String>,
+    whatpub_id: Option<String>,
+    rgl_id: Option<String>,
+    years: Vec<i32>,
+) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let user = session::get_user(&session).await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    // 1. Get old values for audit log
+    let old_pub = get_pub_detail(id).await?;
+
+    // 2. Update pub
+    sqlx::query!(
+        r#"UPDATE pubs SET 
+            name = $1, address = $2, town = $3, region = $4, country_code = $5, postcode = $6, 
+            closed = $7, 
+            location = CASE WHEN $8::float8 IS NOT NULL AND $9::float8 IS NOT NULL 
+                       THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)::geography 
+                       ELSE location END,
+            untappd_id = $11, google_maps_id = $12, whatpub_id = $13, rgl_id = $14
+           WHERE id = $10"#,
+        name, address, town, region, country_code, postcode, closed, lat, lon, id,
+        untappd_id, google_maps_id, whatpub_id, rgl_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // 3. Update history
+    sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1", id)
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    for year in years.clone() {
+        sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)", id, year)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+    }
+
+    // 4. Create audit log
+    let old_json = serde_json::to_value(&old_pub).unwrap();
+    let new_json = serde_json::json!({
+        "name": name, "address": address, "town": town, "region": region,
+        "country_code": country_code, "postcode": postcode, "closed": closed,
+        "lat": lat, "lon": lon, "untappd_id": untappd_id,
+        "google_maps_id": google_maps_id, "whatpub_id": whatpub_id,
+        "rgl_id": rgl_id, "years": years
+    });
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value, new_value)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        user.id, "UPDATE_PUB", "pub", id, old_json, new_json
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // 5. Refresh stats
+    sqlx::query!("REFRESH MATERIALIZED VIEW pub_stats")
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(GetAuditLogs, "/api")]
+pub async fn get_audit_logs() -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use crate::models::AuditLogEntry;
+
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let logs = sqlx::query_as::<_, AuditLogEntry>(
+        r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
+           FROM audit_log l
+           JOIN users u ON l.user_id = u.id
+           ORDER BY l.timestamp DESC LIMIT 50"#
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(logs)
+}
+
+#[server(Logout, "/api")]
+pub async fn logout() -> Result<(), ServerFnError> {
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    session::logout(&session).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    leptos_axum::redirect("/login");
+    Ok(())
+}
+
+#[server(GetCurrentUser, "/api")]
+pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    if let Ok(s) = extract::<Session>().await {
+        Ok(session::get_user(&s).await)
+    } else {
+        Ok(None)
+    }
 }

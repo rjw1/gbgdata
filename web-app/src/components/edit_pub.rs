@@ -1,0 +1,167 @@
+use leptos::prelude::*;
+use crate::models::PubDetail;
+use crate::server::{UpdatePub};
+
+#[component]
+pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
+    let update_action = ServerAction::<UpdatePub>::new();
+    
+    // Form fields as signals initialized with pub_data
+    let (name, set_name) = signal(pub_data.name.clone());
+    let (address, set_address) = signal(pub_data.address.clone());
+    let (town, set_town) = signal(pub_data.town.clone());
+    let (region, set_region) = signal(pub_data.region.clone());
+    let (postcode, set_postcode) = signal(pub_data.postcode.clone());
+    let (closed, set_closed) = signal(pub_data.closed);
+    let (lat, set_lat) = signal(pub_data.lat);
+    let (lon, set_lon) = signal(pub_data.lon);
+    let (untappd_id, set_untappd_id) = signal(pub_data.untappd_id.clone());
+    let (google_maps_id, set_google_maps_id) = signal(pub_data.google_maps_id.clone());
+    let (whatpub_id, set_whatpub_id) = signal(pub_data.whatpub_id.clone());
+    let (rgl_id, set_rgl_id) = signal(pub_data.rgl_id.clone());
+    let (years, set_years) = signal(pub_data.years.clone());
+
+    let current_year = chrono::Datelike::year(&chrono::Local::now());
+    let all_years: Vec<i32> = (1972..=current_year).rev().collect();
+
+    let toggle_year = move |year: i32| {
+        set_years.update(|y| {
+            if y.contains(&year) {
+                y.retain(|&x| x != year);
+            } else {
+                y.push(year);
+                y.sort_by(|a, b| b.cmp(a));
+            }
+        });
+    };
+
+    let on_submit = move |ev: leptos::web_sys::SubmitEvent| {
+        ev.prevent_default();
+        update_action.dispatch(UpdatePub {
+            id: pub_data.id,
+            name: name.get(),
+            address: address.get(),
+            town: town.get(),
+            region: region.get(),
+            country_code: pub_data.country_code.clone(),
+            postcode: postcode.get(),
+            closed: closed.get(),
+            lat: lat.get(),
+            lon: lon.get(),
+            untappd_id: untappd_id.get(),
+            google_maps_id: google_maps_id.get(),
+            whatpub_id: whatpub_id.get(),
+            rgl_id: rgl_id.get(),
+            years: years.get(),
+        });
+    };
+
+    Effect::new(move |_| {
+        if let Some(Ok(())) = update_action.value().get() {
+            on_close.run(());
+        }
+    });
+
+    view! {
+        <div class="edit-pub-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>"Edit Pub: " {move || pub_data.name.clone()}</h3>
+                    <button class="close-btn" on:click=move |_| on_close.run(())>"×"</button>
+                </div>
+                <form on:submit=on_submit class="edit-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>"Name"</label>
+                            <input type="text" value=name on:input=move |ev| set_name.set(event_target_value(&ev)) required />
+                        </div>
+                        <div class="form-group">
+                            <label>"Town"</label>
+                            <input type="text" value=town on:input=move |ev| set_town.set(event_target_value(&ev)) required />
+                        </div>
+                        <div class="form-group">
+                            <label>"Region"</label>
+                            <input type="text" value=region on:input=move |ev| set_region.set(event_target_value(&ev)) required />
+                        </div>
+                        <div class="form-group">
+                            <label>"Postcode"</label>
+                            <input type="text" value=postcode on:input=move |ev| set_postcode.set(event_target_value(&ev)) required />
+                        </div>
+                        <div class="form-group full-width">
+                            <label>"Address"</label>
+                            <textarea on:input=move |ev| set_address.set(event_target_value(&ev))>{move || address.get()}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>"Latitude"</label>
+                            <input type="number" step="any" value=move || lat.get().map(|v| v.to_string()).unwrap_or_default() 
+                                on:input=move |ev| set_lat.set(event_target_value(&ev).parse().ok()) />
+                        </div>
+                        <div class="form-group">
+                            <label>"Longitude"</label>
+                            <input type="number" step="any" value=move || lon.get().map(|v| v.to_string()).unwrap_or_default() 
+                                on:input=move |ev| set_lon.set(event_target_value(&ev).parse().ok()) />
+                        </div>
+                        <div class="form-group checkbox">
+                            <label>
+                                <input type="checkbox" checked=closed on:change=move |ev| set_closed.set(event_target_checked(&ev)) />
+                                " Reported Closed"
+                            </label>
+                        </div>
+                    </div>
+
+                    <h4>"External IDs"</h4>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>"Untappd ID"</label>
+                            <input type="text" value=move || untappd_id.get().unwrap_or_default() 
+                                on:input=move |ev| set_untappd_id.set(Some(event_target_value(&ev))) />
+                        </div>
+                        <div class="form-group">
+                            <label>"WhatPub ID"</label>
+                            <input type="text" value=move || whatpub_id.get().unwrap_or_default() 
+                                on:input=move |ev| set_whatpub_id.set(Some(event_target_value(&ev))) />
+                        </div>
+                        <div class="form-group">
+                            <label>"Google Maps ID"</label>
+                            <input type="text" value=move || google_maps_id.get().unwrap_or_default() 
+                                on:input=move |ev| set_google_maps_id.set(Some(event_target_value(&ev))) />
+                        </div>
+                        <div class="form-group">
+                            <label>"RGL ID"</label>
+                            <input type="text" value=move || rgl_id.get().unwrap_or_default() 
+                                on:input=move |ev| set_rgl_id.set(Some(event_target_value(&ev))) />
+                        </div>
+                    </div>
+
+                    <h4>"GBG History"</h4>
+                    <div class="history-grid">
+                        {all_years.into_iter().map(|year| {
+                            let is_checked = move || years.get().contains(&year);
+                            view! {
+                                <label class="year-toggle">
+                                    <input type="checkbox" checked=is_checked on:change=move |_| toggle_year(year) />
+                                    {year}
+                                    {if year == 1972 { " (Trial)" } else { "" }}
+                                </label>
+                            }
+                        }).collect_view()}
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="save-btn" disabled=update_action.pending()>
+                            {move || if update_action.pending().get() { "Saving..." } else { "Save Changes" }}
+                        </button>
+                        <button type="button" class="cancel-btn" on:click=move |_| on_close.run(())>"Cancel"</button>
+                    </div>
+                    {move || update_action.value().get().map(|v| {
+                        if let Err(e) = v {
+                            view! { <p class="error">{e.to_string()}</p> }.into_any()
+                        } else {
+                            ().into_any()
+                        }
+                    })}
+                </form>
+            </div>
+        </div>
+    }
+}

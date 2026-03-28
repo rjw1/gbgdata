@@ -18,6 +18,7 @@ pub struct ImportPub {
     pub lat: Option<f64>,
     pub lon: Option<f64>,
     pub untappd_id: Option<String>,
+    #[serde(default)]
     pub untappd_verified: bool,
     pub years: Vec<i32>,
 }
