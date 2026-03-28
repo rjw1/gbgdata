@@ -1,20 +1,22 @@
-use leptos::prelude::*;
-use crate::server::{Logout, get_current_user, get_audit_logs, get_pub_detail, ProcessSuggestedUpdate};
 use crate::components::edit_pub::EditPub;
+use crate::server::{
+    get_audit_logs, get_current_user, get_pub_detail, Logout, ProcessSuggestedUpdate,
+};
+use leptos::prelude::*;
 
 #[component]
 pub fn AdminDashboard() -> impl IntoView {
     let logout_action = ServerAction::<Logout>::new();
     let user = Resource::new(|| (), |_| get_current_user());
-    
+
     let (audit_search, set_audit_search) = signal(String::new());
     let (audit_limit, set_audit_limit) = signal(50i64);
 
     let audit_logs = Resource::new(
         move || (audit_search.get(), audit_limit.get()),
-        |(search, limit)| async move { get_audit_logs(search, limit).await }
+        |(search, limit)| async move { get_audit_logs(search, limit).await },
     );
-    
+
     let (active_tab, set_active_tab) = signal(String::from("activity"));
     let (editing_pub_id, set_editing_pub_id) = signal(None::<uuid::Uuid>);
     let (user_search, set_user_search) = signal(String::new());
@@ -29,7 +31,7 @@ pub fn AdminDashboard() -> impl IntoView {
             } else {
                 Ok(vec![])
             }
-        }
+        },
     );
 
     let pending_invites = Resource::new(
@@ -40,7 +42,7 @@ pub fn AdminDashboard() -> impl IntoView {
             } else {
                 Ok(vec![])
             }
-        }
+        },
     );
 
     let update_role_action = ServerAction::<crate::server::UpdateUserRole>::new();
@@ -50,13 +52,18 @@ pub fn AdminDashboard() -> impl IntoView {
     let revoke_invite_action = ServerAction::<crate::server::RevokeInvite>::new();
 
     Effect::new(move |_| {
-        if update_role_action.value().get().is_some() || reset_2fa_action.value().get().is_some() || delete_user_action.value().get().is_some() {
+        if update_role_action.value().get().is_some()
+            || reset_2fa_action.value().get().is_some()
+            || delete_user_action.value().get().is_some()
+        {
             users_list.refetch();
         }
     });
 
     Effect::new(move |_| {
-        if create_invite_action.value().get().is_some() || revoke_invite_action.value().get().is_some() {
+        if create_invite_action.value().get().is_some()
+            || revoke_invite_action.value().get().is_some()
+        {
             pending_invites.refetch();
         }
     });
@@ -69,7 +76,7 @@ pub fn AdminDashboard() -> impl IntoView {
             } else {
                 Ok(vec![])
             }
-        }
+        },
     );
 
     let process_suggestion = ServerAction::<ProcessSuggestedUpdate>::new();
@@ -87,7 +94,7 @@ pub fn AdminDashboard() -> impl IntoView {
                 "coords" | "ids" | "closed" => crate::server::get_missing_data_reports(tab).await,
                 _ => Ok(vec![]),
             }
-        }
+        },
     );
 
     let pub_to_edit = Resource::new(
@@ -97,7 +104,7 @@ pub fn AdminDashboard() -> impl IntoView {
                 Some(uuid) => get_pub_detail(uuid).await,
                 None => Err(ServerFnError::new("No pub selected")),
             }
-        }
+        },
     );
 
     view! {
@@ -143,7 +150,7 @@ pub fn AdminDashboard() -> impl IntoView {
                             <Show when=move || active_tab.get() == "activity">
                                 <h3>"Recent Activity"</h3>
                                 <div class="list-controls">
-                                    <input type="text" placeholder="Search activity..." 
+                                    <input type="text" placeholder="Search activity..."
                                         on:input=move |ev| set_audit_search.set(event_target_value(&ev)) />
                                     <select on:change=move |ev| set_audit_limit.set(event_target_value(&ev).parse().unwrap_or(50))>
                                         <option value="50">"Show 50"</option>
@@ -232,7 +239,7 @@ pub fn AdminDashboard() -> impl IntoView {
                             <Show when=move || active_tab.get() == "users">
                                 <h3>"User Management"</h3>
                                 <div class="list-controls">
-                                    <input type="text" placeholder="Search users..." 
+                                    <input type="text" placeholder="Search users..."
                                         on:input=move |ev| set_user_search.set(event_target_value(&ev)) />
                                     <select on:change=move |ev| set_role_filter.set(event_target_value(&ev))>
                                         <option value="all">"All Roles"</option>
@@ -328,7 +335,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                                     <tbody>
                                                         {list.into_iter().map(|i| {
                                                             let id = i.id;
-                                                            
+
                                                             let invite_url = move || {
                                                                 #[cfg(feature = "hydrate")]
                                                                 {
@@ -342,7 +349,7 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                     format!("/register?invite={}", id)
                                                                 }
                                                             };
-                                                            
+
                                                             let on_copy = move |_| {
                                                                 #[cfg(feature = "hydrate")]
                                                                 {

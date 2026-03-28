@@ -5,11 +5,11 @@ pub fn About() -> impl IntoView {
     view! {
         <div class="about-container">
             <h1>"About GBG Data Explorer"</h1>
-            
+
             <section class="about-section">
                 <h2>"The Project"</h2>
                 <p>
-                    "GBG Data Explorer is a tool designed to visualize and analyze historical data from the CAMRA Good Beer Guide. 
+                    "GBG Data Explorer is a tool designed to visualize and analyze historical data from the CAMRA Good Beer Guide.
                     It allows beer enthusiasts and researchers to track pub inclusions, streaks, and geographic trends over several decades."
                 </p>
             </section>
@@ -18,7 +18,7 @@ pub fn About() -> impl IntoView {
                 <h2>"The 1972 Trial Year"</h2>
                 <p>
                     <strong>"Note on Data Integrity:"</strong>
-                    " The 1972 edition of the Good Beer Guide was a trial run. While we have included the data for historical completeness, 
+                    " The 1972 edition of the Good Beer Guide was a trial run. While we have included the data for historical completeness,
                     it is excluded from all calculated statistics, including 'Total Appearances' and 'Current Streak'."
                 </p>
                 <p>

@@ -1,9 +1,9 @@
-use leptos::prelude::*;
-use crate::server::get_pub_detail;
-use crate::components::stat_ring::StatRing;
 use crate::components::edit_pub::EditPub;
 use crate::components::log_visit::LogVisitModal;
+use crate::components::stat_ring::StatRing;
 use crate::components::suggest_update::SuggestUpdateModal;
+use crate::server::get_pub_detail;
+use leptos::prelude::*;
 use leptos_router::hooks::use_params_map;
 use uuid::Uuid;
 
@@ -64,11 +64,14 @@ pub fn PubDetail() -> impl IntoView {
         |(id, _)| async move {
             if let Some(uuid) = id {
                 let all = crate::server::get_suggested_updates(Some("pending".to_string())).await?;
-                Ok(all.into_iter().filter(|s| s.pub_id == uuid).collect::<Vec<_>>())
+                Ok(all
+                    .into_iter()
+                    .filter(|s| s.pub_id == uuid)
+                    .collect::<Vec<_>>())
             } else {
                 Ok(vec![])
             }
-        }
+        },
     );
 
     Effect::new(move |_| {
@@ -172,10 +175,10 @@ pub fn PubDetail() -> impl IntoView {
                                             let map_url = format!("https://www.openstreetmap.org/export/embed.html?bbox={},{},{},{}&layer=mapnik&marker={},{}", lon - 0.005, lat - 0.005, lon + 0.005, lat + 0.005, lat, lon);
                                             view! {
                                                 <div class="map-container">
-                                                    <iframe 
-                                                        width="100%" 
-                                                        height="300" 
-                                                        style="border:0" 
+                                                    <iframe
+                                                        width="100%"
+                                                        height="300"
+                                                        style="border:0"
                                                         src=map_url
                                                     ></iframe>
                                                 </div>
@@ -186,7 +189,7 @@ pub fn PubDetail() -> impl IntoView {
 
                                         <div class="stats-dashboard">
                                             <StatRing value=p.last_5_years max=5 label="Last 5 Years".to_string() />
-                                            
+
                                             <div class="hero-streak">
                                                 <span class="streak-number">{p.current_streak}</span>
                                                 <span class="streak-label">"Year Streak"</span>
@@ -211,7 +214,7 @@ pub fn PubDetail() -> impl IntoView {
                                                     <span class="stat-value">{p.latest_year.unwrap_or(0)}</span>
                                                 </div>
                                             </div>
-                                            
+
                                             <h3>"Guide Inclusion Years"</h3>
                                             <div class="year-grid">
                                                 {years.into_iter()
@@ -260,12 +263,12 @@ pub fn PubDetail() -> impl IntoView {
                                                                             <img src=p.image_url.clone() alt=p.owner_name.clone() style="max-width: 100%; border-radius: 8px;" />
                                                                         </a>
                                                                         <p class="attribution">
-                                                                            "Photo: " 
+                                                                            "Photo: "
                                                                             <a href=p.original_url.clone() target="_blank">
                                                                                 {if p.flickr_id.is_some() { "Flickr" } else { "Source" }}
                                                                             </a>
                                                                             " by " <strong>{p.owner_name.clone()}</strong>
-                                                                            " (" 
+                                                                            " ("
                                                                             <a href=p.license_url.clone() target="_blank">{p.license_type.clone()}</a>
                                                                             ")"
                                                                         </p>
@@ -288,7 +291,7 @@ pub fn PubDetail() -> impl IntoView {
                                                     let search_url = format!("https://camra.org.uk/pubs/?pub_search={}+{}", name.replace(' ', "+"), postcode.replace(' ', "+"));
                                                     view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on WhatPub"</a></li> }.into_any()
                                                 }}
-                                                
+
                                                 {if let Some(id) = gmaps.clone() {
                                                     view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> }.into_any()
                                                 } else {
@@ -301,8 +304,8 @@ pub fn PubDetail() -> impl IntoView {
                                                         <li>
                                                             <a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a>
                                                             {if untappd_verified {
-                                                                view! { 
-                                                                    <span class="verified-badge" title="Verified on Untappd">" ✓"</span> 
+                                                                view! {
+                                                                    <span class="verified-badge" title="Verified on Untappd">" ✓"</span>
                                                                     " ("
                                                                     <a href=format!("https://untappd.com/venue/{}/menu", id) target="_blank" class="menu-link">"Menu"</a>
                                                                     ")"

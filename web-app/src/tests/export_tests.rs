@@ -17,10 +17,10 @@ fn test_csv_formatting_with_special_characters() {
     }];
     let csv = pub_list_to_csv(pub_data).unwrap();
     let csv_str = String::from_utf8(csv).unwrap();
-    
+
     // Check headers
     assert!(csv_str.contains("id,name,address,town,region,postcode,closed"));
-    
+
     // Check data row - CSV writer should handle quotes and commas
     assert!(csv_str.contains("\"The Dog & Duck, London\""));
     assert!(csv_str.contains("\"123 Main \"\"Street\"\"\""));

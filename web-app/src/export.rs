@@ -236,13 +236,15 @@ pub mod ssr_export {
                 .map(|p| p.postcode.clone())
                 .collect::<Vec<String>>(),
         );
-        let closed_array =
-            BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<bool>>());
-        let lat_array = Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<Option<f64>>>());
-        let lon_array = Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<Option<f64>>>());
+        let closed_array = BooleanArray::from(data.iter().map(|p| p.closed).collect::<Vec<bool>>());
+        let lat_array =
+            Float64Array::from(data.iter().map(|p| p.lat).collect::<Vec<Option<f64>>>());
+        let lon_array =
+            Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<Option<f64>>>());
         let streak_array =
             Int32Array::from(data.iter().map(|p| p.current_streak).collect::<Vec<i32>>());
-        let total_array = Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<i64>>());
+        let total_array =
+            Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<i64>>());
 
         let batch = RecordBatch::try_new(
             schema.clone(),

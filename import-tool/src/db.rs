@@ -1,6 +1,6 @@
-use sqlx::postgres::PgPool;
-use anyhow::Result;
 use crate::excel::ImportPub;
+use anyhow::Result;
+use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 pub async fn insert_pub(pool: &PgPool, pub_data: &ImportPub) -> Result<Uuid> {
@@ -90,7 +90,13 @@ pub async fn update_pub_location(pool: &PgPool, pub_id: Uuid, lat: f64, lon: f64
     Ok(())
 }
 
-pub async fn update_untappd_details(pool: &PgPool, pub_id: Uuid, untappd_id: &str, verified: bool) -> Result<()> {
+#[allow(dead_code)]
+pub async fn update_untappd_details(
+    pool: &PgPool,
+    pub_id: Uuid,
+    untappd_id: &str,
+    verified: bool,
+) -> Result<()> {
     sqlx::query!(
         "UPDATE pubs SET untappd_id = $1, untappd_verified = $2 WHERE id = $3",
         untappd_id,

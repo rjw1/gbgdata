@@ -1,6 +1,6 @@
+use crate::server::LogVisit;
 use leptos::prelude::*;
 use uuid::Uuid;
-use crate::server::LogVisit;
 
 #[component]
 pub fn LogVisitModal(pub_id: Uuid, on_close: Callback<()>) -> impl IntoView {

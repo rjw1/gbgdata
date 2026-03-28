@@ -1,22 +1,22 @@
-use crate::components::pub_list::PubList;
-use crate::components::pub_detail::PubDetail;
 use crate::components::about::About;
-use crate::components::near_me::NearMe;
-use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList, YearDashboard};
-use crate::components::rankings::Rankings;
+use crate::components::admin::AdminDashboard;
+use crate::components::explorer::{ExplorerHome, LocationPubList, RegionDashboard, YearDashboard};
 use crate::components::login::LoginForm;
+use crate::components::my_visits::MyVisits;
+use crate::components::near_me::NearMe;
+use crate::components::profile::Profile;
+use crate::components::pub_detail::PubDetail;
+use crate::components::pub_list::PubList;
+use crate::components::rankings::Rankings;
 use crate::components::register::RegisterPage;
 use crate::components::setup_2fa::Setup2FA;
-use crate::components::profile::Profile;
-use crate::components::admin::AdminDashboard;
-use crate::components::my_visits::MyVisits;
 use crate::server::Logout;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
+    components::A,
     components::{Route, Router, Routes},
     path,
-    components::A,
 };
 
 #[component]
@@ -36,7 +36,7 @@ pub fn ThemeToggle() -> impl IntoView {
         let t = theme.get();
         let document = document().document_element().expect("no document element");
         let storage = window().local_storage().ok().flatten();
-        
+
         if t == "system" {
             let _ = document.remove_attribute("data-theme");
         } else {
@@ -120,7 +120,11 @@ fn RouterContent() -> impl IntoView {
     Effect::new(move |_| {
         if let Some(Ok(Some(u))) = user.get() {
             let path = location.pathname.get();
-            if !u.totp_setup_completed && path != "/setup-2fa" && path != "/login" && path != "/about" {
+            if !u.totp_setup_completed
+                && path != "/setup-2fa"
+                && path != "/login"
+                && path != "/about"
+            {
                 navigate("/setup-2fa", Default::default());
             }
         }
@@ -181,7 +185,7 @@ fn RouterContent() -> impl IntoView {
                 <Route path=path!("/rankings") view=Rankings/>
                 <Route path=path!("/about") view=About/>
                 <Route path=path!("/pub/:id") view=PubDetail/>
-                
+
                 <Route path=path!("/explore") view=ExplorerHome/>
                 <Route path=path!("/explore/:region") view=RegionDashboard/>
                 <Route path=path!("/explore/:region/all") view=LocationPubList/>

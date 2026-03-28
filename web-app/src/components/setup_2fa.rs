@@ -1,12 +1,12 @@
+use crate::server::{get_current_user, VerifyAndCompleteTotpSetup};
 use leptos::prelude::*;
-use crate::server::{VerifyAndCompleteTotpSetup, get_current_user};
 
 #[component]
 pub fn Setup2FA() -> impl IntoView {
     let setup_info = Resource::new(|| (), |_| get_totp_setup_info_wrapper());
     let verify_action = ServerAction::<VerifyAndCompleteTotpSetup>::new();
     let user = Resource::new(|| (), |_| get_current_user());
-    
+
     let (_code, set_code) = signal(String::new());
     let navigate = leptos_router::hooks::use_navigate();
 
@@ -66,7 +66,7 @@ pub fn Setup2FA() -> impl IntoView {
                                                     user.get().and_then(|u| u.ok().flatten()).map(|u| u.id.to_string()).unwrap_or_default()
                                                 } />
                                                 <div class="form-group">
-                                                    <input type="text" name="code" placeholder="000000" 
+                                                    <input type="text" name="code" placeholder="000000"
                                                         on:input=move |ev| set_code.set(event_target_value(&ev)) required />
                                                 </div>
                                                 <button type="submit" class="btn btn-primary btn-block" disabled=verify_action.pending()>

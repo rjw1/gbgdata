@@ -41,8 +41,7 @@ pub enum SortMode {
 }
 
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PubDetail {
     pub id: Uuid,
     pub name: String,

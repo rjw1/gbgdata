@@ -1,18 +1,21 @@
-use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus, UserManagementEntry, UserInvite};
-#[cfg(feature = "ssr")]
-use crate::models::{TownSummary, OutcodeSummary};
 use crate::auth::User;
+#[cfg(feature = "ssr")]
+use crate::models::{OutcodeSummary, TownSummary};
+use crate::models::{
+    PubDetail, PubSummary, RegionDetails, RegionSummary, SortMode, UserAuthStatus, UserInvite,
+    UserManagementEntry, YearSummary,
+};
+use leptos::prelude::*;
 use uuid::Uuid;
 
 #[server(Login, "/api")]
 pub async fn login(username: String, password: String) -> Result<Option<Uuid>, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
     use crate::auth::verify_password;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use leptos::context::use_context;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let user = sqlx::query!(
         "SELECT id, password_hash FROM users WHERE username = $1",
@@ -33,16 +36,17 @@ pub async fn login(username: String, password: String) -> Result<Option<Uuid>, S
 
 #[server(Verify2FA, "/api")]
 pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::{session, verify_recovery_code, verify_totp, User};
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::{verify_totp, verify_recovery_code, User, session};
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let session = extract::<Session>().await
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let user_data = sqlx::query!(
@@ -53,17 +57,18 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let success = if code.len() == 6 && code.chars().all(|c| c.is_digit(10)) {
+    let success = if code.len() == 6 && code.chars().all(|c| c.is_ascii_digit()) {
         verify_totp(&user_data.username, &user_data.totp_secret_enc, &code)
     } else {
         // Check recovery codes
         if verify_recovery_code(&code, &user_data.recovery_codes_hash) {
             // Remove used recovery code
-            let new_codes: Vec<String> = user_data.recovery_codes_hash
+            let new_codes: Vec<String> = user_data
+                .recovery_codes_hash
                 .into_iter()
                 .filter(|h| !crate::auth::verify_password(&code, h))
                 .collect();
-            
+
             sqlx::query!(
                 "UPDATE users SET recovery_codes_hash = $1 WHERE id = $2",
                 &new_codes,
@@ -72,7 +77,7 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
             .execute(&pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
-            
+
             true
         } else {
             false
@@ -83,14 +88,22 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
         sqlx::query!(
             "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1",
             user_data.id
-        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        session::login(&session, &User {
-            id: user_data.id,
-            username: user_data.username,
-            role: user_data.role,
-            totp_setup_completed: user_data.totp_setup_completed,
-        }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        session::login(
+            &session,
+            &User {
+                id: user_data.id,
+                username: user_data.username,
+                role: user_data.role,
+                totp_setup_completed: user_data.totp_setup_completed,
+            },
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     }
 
     Ok(success)
@@ -101,24 +114,26 @@ fn get_order_by(sort: Option<SortMode>, default: &str) -> String {
     match sort.unwrap_or_default() {
         SortMode::Name => "ORDER BY p.name ASC".to_string(),
         SortMode::Streak => "ORDER BY COALESCE(s.current_streak, 0) DESC, p.name ASC".to_string(),
-        SortMode::TotalEntries => "ORDER BY COALESCE(s.total_years, 0) DESC, p.name ASC".to_string(),
+        SortMode::TotalEntries => {
+            "ORDER BY COALESCE(s.total_years, 0) DESC, p.name ASC".to_string()
+        }
         SortMode::Distance => format!("ORDER BY {} ASC, p.name ASC", default),
     }
 }
 
 #[server(GetYears, "/api")]
 pub async fn get_years() -> Result<Vec<YearSummary>, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let years = sqlx::query_as::<_, YearSummary>(
         r#"SELECT year, COUNT(*) as "pub_count"
            FROM gbg_history 
            GROUP BY year 
-           ORDER BY year DESC"#
+           ORDER BY year DESC"#,
     )
     .fetch_all(&pool)
     .await
@@ -129,11 +144,11 @@ pub async fn get_years() -> Result<Vec<YearSummary>, ServerFnError> {
 
 #[server(GetYearRegions, "/api")]
 pub async fn get_year_regions(year: i32) -> Result<Vec<RegionSummary>, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let regions = sqlx::query_as::<_, RegionSummary>(
         r#"SELECT p.region as "name", COUNT(*) as "pub_count"
@@ -141,7 +156,7 @@ pub async fn get_year_regions(year: i32) -> Result<Vec<RegionSummary>, ServerFnE
            JOIN gbg_history h ON p.id = h.pub_id
            WHERE h.year = $1 AND p.region IS NOT NULL AND p.region != ''
            GROUP BY p.region 
-           ORDER BY p.region"#
+           ORDER BY p.region"#,
     )
     .bind(year)
     .fetch_all(&pool)
@@ -153,18 +168,18 @@ pub async fn get_year_regions(year: i32) -> Result<Vec<RegionSummary>, ServerFnE
 
 #[server(GetRegions, "/api")]
 pub async fn get_regions() -> Result<Vec<RegionSummary>, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let regions = sqlx::query_as::<_, RegionSummary>(
         r#"SELECT region as "name", COUNT(*) as "pub_count"
            FROM pubs 
            WHERE region IS NOT NULL AND region != ''
            GROUP BY region 
-           ORDER BY region"#
+           ORDER BY region"#,
     )
     .fetch_all(&pool)
     .await
@@ -174,12 +189,15 @@ pub async fn get_regions() -> Result<Vec<RegionSummary>, ServerFnError> {
 }
 
 #[server(GetRegionDetails, "/api")]
-pub async fn get_region_details(region: String, year: Option<i32>) -> Result<RegionDetails, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_region_details(
+    region: String,
+    year: Option<i32>,
+) -> Result<RegionDetails, ServerFnError> {
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let towns_query = if year.is_some() {
         r#"SELECT town as "name", COUNT(*) as "pub_count"
@@ -197,8 +215,13 @@ pub async fn get_region_details(region: String, year: Option<i32>) -> Result<Reg
     };
 
     let mut towns_q = sqlx::query_as::<_, TownSummary>(towns_query).bind(&region);
-    if let Some(y) = year { towns_q = towns_q.bind(y); }
-    let towns = towns_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    if let Some(y) = year {
+        towns_q = towns_q.bind(y);
+    }
+    let towns = towns_q
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let outcodes_query = if year.is_some() {
         r#"SELECT SPLIT_PART(postcode, ' ', 1) as "name", COUNT(*) as "pub_count"
@@ -216,8 +239,13 @@ pub async fn get_region_details(region: String, year: Option<i32>) -> Result<Reg
     };
 
     let mut outcodes_q = sqlx::query_as::<_, OutcodeSummary>(outcodes_query).bind(&region);
-    if let Some(y) = year { outcodes_q = outcodes_q.bind(y); }
-    let outcodes = outcodes_q.fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    if let Some(y) = year {
+        outcodes_q = outcodes_q.bind(y);
+    }
+    let outcodes = outcodes_q
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(RegionDetails {
         name: region,
@@ -227,12 +255,19 @@ pub async fn get_region_details(region: String, year: Option<i32>) -> Result<Reg
 }
 
 #[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode: Option<String>, year: Option<i32>, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_pubs_by_location(
+    region: String,
+    town: Option<String>,
+    outcode: Option<String>,
+    year: Option<i32>,
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let mut query = String::from(
         r#"SELECT p.id, p.name, 
@@ -251,7 +286,7 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
                   p.google_maps_id,
                   p.untappd_id
            FROM pubs p
-           LEFT JOIN pub_stats s ON p.id = s.pub_id"#
+           LEFT JOIN pub_stats s ON p.id = s.pub_id"#,
     );
 
     if year.is_some() {
@@ -268,7 +303,10 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
         binds.push(t);
         param_idx += 1;
     } else if let Some(o) = outcode {
-        query.push_str(&format!(" AND SPLIT_PART(p.postcode, ' ', 1) = ${}", param_idx));
+        query.push_str(&format!(
+            " AND SPLIT_PART(p.postcode, ' ', 1) = ${}",
+            param_idx
+        ));
         binds.push(o);
         param_idx += 1;
     }
@@ -286,34 +324,58 @@ pub async fn get_pubs_by_location(region: String, town: Option<String>, outcode:
     // Handle types properly - since year is i32, we need a custom query builder or fixed variants
     let pubs = if let Some(y) = year {
         if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(&binds[1]).bind(y).fetch_all(&pool).await
+            sqlx::query_as::<_, PubSummary>(&query)
+                .bind(&binds[0])
+                .bind(&binds[1])
+                .bind(y)
+                .fetch_all(&pool)
+                .await
         } else {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(y).fetch_all(&pool).await
+            sqlx::query_as::<_, PubSummary>(&query)
+                .bind(&binds[0])
+                .bind(y)
+                .fetch_all(&pool)
+                .await
         }
     } else {
         if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).bind(&binds[1]).fetch_all(&pool).await
+            sqlx::query_as::<_, PubSummary>(&query)
+                .bind(&binds[0])
+                .bind(&binds[1])
+                .fetch_all(&pool)
+                .await
         } else {
-            sqlx::query_as::<_, PubSummary>(&query).bind(&binds[0]).fetch_all(&pool).await
+            sqlx::query_as::<_, PubSummary>(&query)
+                .bind(&binds[0])
+                .fetch_all(&pool)
+                .await
         }
-    }.map_err(|e| ServerFnError::new(e.to_string()))?;
+    }
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(pubs)
 }
 
 #[server(GetPubs, "/api")]
-pub async fn get_pubs(query: String, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_pubs(
+    query: String,
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
 
-    let open_filter = if open_only.unwrap_or(false) { "AND p.closed = false" } else { "" };
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pubs = sqlx::query_as::<_, PubSummary>(
-        &format!(
-            r#"SELECT p.id, p.name, 
+    let open_filter = if open_only.unwrap_or(false) {
+        "AND p.closed = false"
+    } else {
+        ""
+    };
+
+    let pubs = sqlx::query_as::<_, PubSummary>(&format!(
+        r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.region, '') as region, 
                   p.country_code,
@@ -333,10 +395,9 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>, open_only: Option<b
            WHERE (p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1)
            {}
            {} LIMIT 50"#,
-            open_filter,
-            get_order_by(sort, "p.name")
-        )
-    )
+        open_filter,
+        get_order_by(sort, "p.name")
+    ))
     .bind(format!("%{}%", query))
     .fetch_all(&pool)
     .await
@@ -346,18 +407,24 @@ pub async fn get_pubs(query: String, sort: Option<SortMode>, open_only: Option<b
 }
 
 #[server(GetRankedPubs, "/api")]
-pub async fn get_ranked_pubs(sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_ranked_pubs(
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
 
-    let open_filter = if open_only.unwrap_or(false) { "WHERE p.closed = false" } else { "" };
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let pubs = sqlx::query_as::<_, PubSummary>(
-        &format!(
-            r#"SELECT p.id, p.name, 
+    let open_filter = if open_only.unwrap_or(false) {
+        "WHERE p.closed = false"
+    } else {
+        ""
+    };
+
+    let pubs = sqlx::query_as::<_, PubSummary>(&format!(
+        r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.region, '') as region, 
                   p.country_code,
@@ -376,10 +443,9 @@ pub async fn get_ranked_pubs(sort: Option<SortMode>, open_only: Option<bool>) ->
            JOIN pub_stats s ON p.id = s.pub_id
            {}
            {} LIMIT 100"#,
-            open_filter,
-            get_order_by(sort, "s.total_years DESC")
-        )
-    )
+        open_filter,
+        get_order_by(sort, "s.total_years DESC")
+    ))
     .fetch_all(&pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -408,7 +474,8 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
         .build()
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let resp = client.get(nominatim_url)
+    let resp = client
+        .get(nominatim_url)
         .query(&[
             ("q", query),
             ("format", "json".to_string()),
@@ -424,12 +491,20 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
         lon: String,
     }
 
-    let results: Vec<NominatimResponse> = resp.json().await
+    let results: Vec<NominatimResponse> = resp
+        .json()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     if let Some(res) = results.first() {
-        let lat = res.lat.parse::<f64>().map_err(|e| ServerFnError::new(e.to_string()))?;
-        let lon = res.lon.parse::<f64>().map_err(|e| ServerFnError::new(e.to_string()))?;
+        let lat = res
+            .lat
+            .parse::<f64>()
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let lon = res
+            .lon
+            .parse::<f64>()
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
         Ok(Some((lat, lon)))
     } else {
         Ok(None)
@@ -437,14 +512,24 @@ pub async fn geocode_manual(query: String) -> Result<Option<(f64, f64)>, ServerF
 }
 
 #[server(GetNearbyPubs, "/api")]
-pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Option<SortMode>, open_only: Option<bool>) -> Result<Vec<PubSummary>, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_nearby_pubs(
+    lat: f64,
+    lon: f64,
+    radius_meters: f64,
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::PgPool;
 
-    let open_filter = if open_only.unwrap_or(false) { "AND p.closed = false" } else { "" };
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let open_filter = if open_only.unwrap_or(false) {
+        "AND p.closed = false"
+    } else {
+        ""
+    };
 
     let pubs = sqlx::query_as::<_, PubSummary>(
         &format!(
@@ -485,11 +570,11 @@ pub async fn get_nearby_pubs(lat: f64, lon: f64, radius_meters: f64, sort: Optio
 
 #[server(GetPubDetail, "/api")]
 pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
-    use sqlx::{PgPool, Row};
     use leptos::context::use_context;
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    use sqlx::{PgPool, Row};
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
     let row = sqlx::query(
         r#"SELECT p.id, p.name, 
@@ -510,7 +595,7 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
                   s.latest_year
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE p.id = $1"#
+           WHERE p.id = $1"#,
     )
     .bind(id)
     .fetch_one(&pool)
@@ -518,7 +603,7 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
     .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let years = sqlx::query_scalar::<_, i32>(
-        "SELECT year FROM gbg_history WHERE pub_id = $1 ORDER BY year DESC"
+        "SELECT year FROM gbg_history WHERE pub_id = $1 ORDER BY year DESC",
     )
     .bind(id)
     .fetch_all(&pool)
@@ -552,6 +637,7 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
 }
 
 #[server(UpdatePub, "/api")]
+#[allow(clippy::too_many_arguments)]
 pub async fn update_pub(
     id: Uuid,
     name: String,
@@ -569,19 +655,21 @@ pub async fn update_pub(
     rgl_id: Option<String>,
     years: Vec<i32>,
 ) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let session = extract::<Session>().await
+    let session = extract::<Session>()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let user = session::get_user(&session).await
+    let user = session::get_user(&session)
+        .await
         .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     // 1. Get old values for audit log
@@ -597,8 +685,20 @@ pub async fn update_pub(
                        ELSE location END,
             untappd_id = $11, google_maps_id = $12, whatpub_id = $13, rgl_id = $14
            WHERE id = $10"#,
-        name, address, town, region, country_code, postcode, closed, lat, lon, id,
-        untappd_id, google_maps_id, whatpub_id, rgl_id
+        name,
+        address,
+        town,
+        region,
+        country_code,
+        postcode,
+        closed,
+        lat,
+        lon,
+        id,
+        untappd_id,
+        google_maps_id,
+        whatpub_id,
+        rgl_id
     )
     .execute(&pool)
     .await
@@ -611,10 +711,14 @@ pub async fn update_pub(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     for year in years.clone() {
-        sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)", id, year)
-            .execute(&pool)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        sqlx::query!(
+            "INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)",
+            id,
+            year
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     }
 
     // 4. Create audit log
@@ -630,7 +734,12 @@ pub async fn update_pub(
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value, new_value)
          VALUES ($1, $2, $3, $4, $5, $6)",
-        user.id, "UPDATE_PUB", "pub", id, old_json, new_json
+        user.id,
+        "UPDATE_PUB",
+        "pub",
+        id,
+        old_json,
+        new_json
     )
     .execute(&pool)
     .await
@@ -646,16 +755,24 @@ pub async fn update_pub(
 }
 
 #[server(LogVisit, "/api")]
-pub async fn log_visit(pub_id: Uuid, visit_date: String, notes: Option<String>) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn log_visit(
+    pub_id: Uuid,
+    visit_date: String,
+    notes: Option<String>,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let date = chrono::NaiveDate::parse_from_str(&visit_date, "%Y-%m-%d")
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -663,28 +780,34 @@ pub async fn log_visit(pub_id: Uuid, visit_date: String, notes: Option<String>) 
     // Use query (non-macro) to avoid NaiveDate issues with macros
     sqlx::query(
         "INSERT INTO user_visits (user_id, pub_id, visit_date, notes) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id, pub_id, visit_date) DO NOTHING"
+         ON CONFLICT (user_id, pub_id, visit_date) DO NOTHING",
     )
     .bind(user.id)
     .bind(pub_id)
     .bind(date)
     .bind(notes)
-    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(GetUserVisits, "/api")]
 pub async fn get_user_visits() -> Result<Vec<crate::models::VisitRecord>, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let visits = sqlx::query_as!(
         crate::models::VisitRecord,
@@ -704,20 +827,23 @@ pub async fn get_user_visits() -> Result<Vec<crate::models::VisitRecord>, Server
 
 #[server(GetPubVisitStatus, "/api")]
 pub async fn get_pub_visit_status(pub_id: Uuid) -> Result<bool, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await;
 
     if let Some(user) = user {
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM user_visits WHERE user_id = $1 AND pub_id = $2",
-            user.id, pub_id
+            user.id,
+            pub_id
         )
         .fetch_one(&pool)
         .await
@@ -730,17 +856,24 @@ pub async fn get_pub_visit_status(pub_id: Uuid) -> Result<bool, ServerFnError> {
 }
 
 #[server(FetchFlickrPhoto, "/api")]
-pub async fn fetch_flickr_photo(url_or_id: String) -> Result<crate::models::FlickrPhotoInfo, ServerFnError> {
+pub async fn fetch_flickr_photo(
+    url_or_id: String,
+) -> Result<crate::models::FlickrPhotoInfo, ServerFnError> {
     use crate::models::FlickrPhotoInfo;
-    let api_key = std::env::var("FLICKR_API_KEY").map_err(|_| ServerFnError::new("FLICKR_API_KEY not set"))?;
-    
+    let api_key = std::env::var("FLICKR_API_KEY")
+        .map_err(|_| ServerFnError::new("FLICKR_API_KEY not set"))?;
+
     // Extract photo ID (simple version: last part of URL or just the ID)
-    let photo_id = url_or_id.split('/').filter(|s| !s.is_empty()).last().ok_or_else(|| ServerFnError::new("Invalid Flickr URL or ID"))?;
-    
+    let photo_id = url_or_id
+        .split('/')
+        .rfind(|s| !s.is_empty())
+        .ok_or_else(|| ServerFnError::new("Invalid Flickr URL or ID"))?;
+
     let client = reqwest::Client::new();
-    
+
     // 1. Get Info
-    let info_resp = client.get("https://www.flickr.com/services/rest/")
+    let info_resp = client
+        .get("https://www.flickr.com/services/rest/")
         .query(&[
             ("method", "flickr.photos.getInfo"),
             ("api_key", &api_key),
@@ -748,36 +881,83 @@ pub async fn fetch_flickr_photo(url_or_id: String) -> Result<crate::models::Flic
             ("format", "json"),
             ("nojsoncallback", "1"),
         ])
-        .send().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-        
-    let info_json: serde_json::Value = info_resp.json().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+        .send()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let info_json: serde_json::Value = info_resp
+        .json()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     if info_json["stat"] != "ok" {
-        return Err(ServerFnError::new(format!("Flickr API error: {}", info_json["message"])));
+        return Err(ServerFnError::new(format!(
+            "Flickr API error: {}",
+            info_json["message"]
+        )));
     }
-    
+
     let photo = &info_json["photo"];
-    let owner_name = photo["owner"]["realname"].as_str().filter(|s| !s.is_empty())
+    let owner_name = photo["owner"]["realname"]
+        .as_str()
+        .filter(|s| !s.is_empty())
         .unwrap_or_else(|| photo["owner"]["username"].as_str().unwrap_or("Unknown"));
     let title = photo["title"]["_content"].as_str().unwrap_or("Untitled");
     let license_id = photo["license"].as_str().unwrap_or("0");
-    
+
     // License mapping (Flickr IDs for CC)
     // 1: Attrib-NC-SA, 2: Attrib-NC, 3: Attrib-NC-ND, 4: Attrib, 5: Attrib-SA, 6: Attrib-ND, 9: CC0, 10: Public Domain
     let (license_type, license_url, is_cc) = match license_id {
-        "1" => ("Attribution-NonCommercial-ShareAlike", "https://creativecommons.org/licenses/by-nc-sa/2.0/", true),
-        "2" => ("Attribution-NonCommercial", "https://creativecommons.org/licenses/by-nc/2.0/", true),
-        "3" => ("Attribution-NonCommercial-NoDerivs", "https://creativecommons.org/licenses/by-nc-nd/2.0/", true),
-        "4" => ("Attribution", "https://creativecommons.org/licenses/by/2.0/", true),
-        "5" => ("Attribution-ShareAlike", "https://creativecommons.org/licenses/by-sa/2.0/", true),
-        "6" => ("Attribution-NoDerivs", "https://creativecommons.org/licenses/by-nd/2.0/", true),
-        "9" => ("CC0 1.0 Universal", "https://creativecommons.org/publicdomain/zero/1.0/", true),
-        "10" => ("Public Domain Mark 1.0", "https://creativecommons.org/publicdomain/mark/1.0/", true),
-        _ => ("All Rights Reserved", "https://www.flickr.com/help/usage/", false),
+        "1" => (
+            "Attribution-NonCommercial-ShareAlike",
+            "https://creativecommons.org/licenses/by-nc-sa/2.0/",
+            true,
+        ),
+        "2" => (
+            "Attribution-NonCommercial",
+            "https://creativecommons.org/licenses/by-nc/2.0/",
+            true,
+        ),
+        "3" => (
+            "Attribution-NonCommercial-NoDerivs",
+            "https://creativecommons.org/licenses/by-nc-nd/2.0/",
+            true,
+        ),
+        "4" => (
+            "Attribution",
+            "https://creativecommons.org/licenses/by/2.0/",
+            true,
+        ),
+        "5" => (
+            "Attribution-ShareAlike",
+            "https://creativecommons.org/licenses/by-sa/2.0/",
+            true,
+        ),
+        "6" => (
+            "Attribution-NoDerivs",
+            "https://creativecommons.org/licenses/by-nd/2.0/",
+            true,
+        ),
+        "9" => (
+            "CC0 1.0 Universal",
+            "https://creativecommons.org/publicdomain/zero/1.0/",
+            true,
+        ),
+        "10" => (
+            "Public Domain Mark 1.0",
+            "https://creativecommons.org/publicdomain/mark/1.0/",
+            true,
+        ),
+        _ => (
+            "All Rights Reserved",
+            "https://www.flickr.com/help/usage/",
+            false,
+        ),
     };
-    
+
     // 2. Get Sizes
-    let sizes_resp = client.get("https://www.flickr.com/services/rest/")
+    let sizes_resp = client
+        .get("https://www.flickr.com/services/rest/")
         .query(&[
             ("method", "flickr.photos.getSizes"),
             ("api_key", &api_key),
@@ -785,19 +965,32 @@ pub async fn fetch_flickr_photo(url_or_id: String) -> Result<crate::models::Flic
             ("format", "json"),
             ("nojsoncallback", "1"),
         ])
-        .send().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-        
-    let sizes_json: serde_json::Value = sizes_resp.json().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
-    let sizes = sizes_json["sizes"]["size"].as_array().ok_or_else(|| ServerFnError::new("No sizes found"))?;
-    
+        .send()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let sizes_json: serde_json::Value = sizes_resp
+        .json()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let sizes = sizes_json["sizes"]["size"]
+        .as_array()
+        .ok_or_else(|| ServerFnError::new("No sizes found"))?;
+
     // Prefer "Large" or "Medium 800" or just the largest available
-    let large_size = sizes.iter().find(|s| s["label"] == "Large")
+    let large_size = sizes
+        .iter()
+        .find(|s| s["label"] == "Large")
         .or_else(|| sizes.iter().find(|s| s["label"] == "Medium 800"))
         .unwrap_or_else(|| sizes.last().unwrap());
-        
+
     let image_url = large_size["source"].as_str().unwrap().to_string();
-    let original_url = format!("https://www.flickr.com/photos/{}/{}", photo["owner"]["nsid"].as_str().unwrap(), photo_id);
+    let original_url = format!(
+        "https://www.flickr.com/photos/{}/{}",
+        photo["owner"]["nsid"].as_str().unwrap(),
+        photo_id
+    );
 
     Ok(FlickrPhotoInfo {
         flickr_id: photo_id.to_string(),
@@ -812,16 +1005,23 @@ pub async fn fetch_flickr_photo(url_or_id: String) -> Result<crate::models::Flic
 }
 
 #[server(AddPubPhoto, "/api")]
-pub async fn add_pub_photo(pub_id: Uuid, flickr_info: crate::models::FlickrPhotoInfo) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn add_pub_photo(
+    pub_id: Uuid,
+    flickr_info: crate::models::FlickrPhotoInfo,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     // Use query (non-macro) to avoid issues with macros and nullable bools
     sqlx::query(
@@ -841,17 +1041,23 @@ pub async fn add_pub_photo(pub_id: Uuid, flickr_info: crate::models::FlickrPhoto
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        user.id, "add_photo", "pub", pub_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.id,
+        "add_photo",
+        "pub",
+        pub_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(GetPubPhotos, "/api")]
 pub async fn get_pub_photos(pub_id: Uuid) -> Result<Vec<crate::models::PubPhoto>, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
-    
+    use sqlx::PgPool;
+
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
     let photos = sqlx::query_as!(
@@ -868,193 +1074,280 @@ pub async fn get_pub_photos(pub_id: Uuid) -> Result<Vec<crate::models::PubPhoto>
 #[cfg(feature = "ssr")]
 fn get_webauthn() -> Result<webauthn_rs::Webauthn, ServerFnError> {
     let rp_id = std::env::var("RP_ID").unwrap_or_else(|_| "localhost".to_string());
-    let rp_origin_str = std::env::var("RP_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
-    let rp_origin = url::Url::parse(&rp_origin_str).map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    let rp_origin_str =
+        std::env::var("RP_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let rp_origin =
+        url::Url::parse(&rp_origin_str).map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let builder = webauthn_rs::WebauthnBuilder::new(&rp_id, &rp_origin)
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-        
-    builder.build().map_err(|e| ServerFnError::new(e.to_string()))
+
+    builder
+        .build()
+        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 #[server(StartPasskeyRegistration, "/api")]
 pub async fn start_passkey_registration() -> Result<serde_json::Value, ServerFnError> {
+    use crate::auth::session;
     use leptos_axum::extract;
     use tower_sessions::Session;
-    use crate::auth::session;
 
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let webauthn = get_webauthn()?;
-    
-    let (challenge, registration_state) = webauthn.start_passkey_registration(user.id, &user.username, &user.username, None)
+
+    let (challenge, registration_state) = webauthn
+        .start_passkey_registration(user.id, &user.username, &user.username, None)
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-        
-    session.insert("registration_state", registration_state).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+
+    session
+        .insert("registration_state", registration_state)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(serde_json::to_value(challenge).unwrap())
 }
 
 #[server(FinishPasskeyRegistration, "/api")]
-pub async fn finish_passkey_registration(reg_response: serde_json::Value) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn finish_passkey_registration(
+    reg_response: serde_json::Value,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
     use webauthn_rs::prelude::*;
 
-    let reg_response: RegisterPublicKeyCredential = serde_json::from_value(reg_response).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let reg_response: RegisterPublicKeyCredential =
+        serde_json::from_value(reg_response).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    let registration_state: PasskeyRegistration = session.get("registration_state").await
+    let registration_state: PasskeyRegistration = session
+        .get("registration_state")
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Registration state not found in session"))?;
-        
+
     let webauthn = get_webauthn()?;
-    let passkey = webauthn.finish_passkey_registration(&reg_response, &registration_state)
+    let passkey = webauthn
+        .finish_passkey_registration(&reg_response, &registration_state)
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-        
+
     let credential_id = passkey.cred_id().to_vec();
     let public_key = serde_json::to_vec(&passkey).map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+
     sqlx::query!(
         "INSERT INTO user_credentials (user_id, credential_id, public_key) VALUES ($1, $2, $3)",
-        user.id, credential_id, public_key
+        user.id,
+        credential_id,
+        public_key
     )
-    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-    
-    session.remove::<PasskeyRegistration>("registration_state").await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    .execute(&pool)
+    .await
+    .map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+
+    session
+        .remove::<PasskeyRegistration>("registration_state")
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(())
 }
 
 #[server(StartPasskeyAuthentication, "/api")]
-pub async fn start_passkey_authentication(username: String) -> Result<serde_json::Value, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn start_passkey_authentication(
+    username: String,
+) -> Result<serde_json::Value, ServerFnError> {
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
     use webauthn_rs::prelude::*;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let user_creds = sqlx::query!(
         "SELECT c.public_key FROM user_credentials c JOIN users u ON c.user_id = u.id WHERE u.username = $1",
         username
     )
     .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
-    let passkeys: Vec<Passkey> = user_creds.iter()
+
+    let passkeys: Vec<Passkey> = user_creds
+        .iter()
         .map(|c| serde_json::from_slice(&c.public_key).unwrap())
         .collect();
-        
+
     let webauthn = get_webauthn()?;
-    let (challenge, authentication_state) = webauthn.start_passkey_authentication(&passkeys)
+    let (challenge, authentication_state) = webauthn
+        .start_passkey_authentication(&passkeys)
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-        
-    session.insert("authentication_state", authentication_state).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    session.insert("auth_username", username).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+
+    session
+        .insert("authentication_state", authentication_state)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    session
+        .insert("auth_username", username)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(serde_json::to_value(challenge).unwrap())
 }
 
 #[server(FinishPasskeyAuthentication, "/api")]
-pub async fn finish_passkey_authentication(auth_response: serde_json::Value) -> Result<bool, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn finish_passkey_authentication(
+    auth_response: serde_json::Value,
+) -> Result<bool, ServerFnError> {
+    use crate::auth::{session, User};
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::{session, User};
     use webauthn_rs::prelude::*;
 
-    let auth_response: PublicKeyCredential = serde_json::from_value(auth_response).map_err(|e| ServerFnError::new(e.to_string()))?;
+    let auth_response: PublicKeyCredential =
+        serde_json::from_value(auth_response).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let authentication_state: PasskeyAuthentication = session.get("authentication_state").await
+    let authentication_state: PasskeyAuthentication = session
+        .get("authentication_state")
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Authentication state not found in session"))?;
-        
-    let username: String = session.get("auth_username").await
+
+    let username: String = session
+        .get("auth_username")
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .ok_or_else(|| ServerFnError::new("Username not found in session"))?;
-        
+
     let webauthn = get_webauthn()?;
-    let auth_result = webauthn.finish_passkey_authentication(&auth_response, &authentication_state)
+    let auth_result = webauthn
+        .finish_passkey_authentication(&auth_response, &authentication_state)
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-        
+
     // Update sign count
     let credential_id = auth_result.cred_id().to_vec();
     sqlx::query!(
         "UPDATE user_credentials SET sign_count = $1 WHERE credential_id = $2",
-        auth_result.counter() as i64, credential_id
+        auth_result.counter() as i64,
+        credential_id
     )
-    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-    
+    .execute(&pool)
+    .await
+    .map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+
     // Login user
     let user_data = sqlx::query!(
         "SELECT id, username, role, totp_setup_completed FROM users WHERE username = $1",
         username
-    ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1",
         user_data.id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    session::login(&session, &User {
-        id: user_data.id,
-        username: user_data.username,
-        role: user_data.role,
-        totp_setup_completed: user_data.totp_setup_completed,
-    }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    session::login(
+        &session,
+        &User {
+            id: user_data.id,
+            username: user_data.username,
+            role: user_data.role,
+            totp_setup_completed: user_data.totp_setup_completed,
+        },
+    )
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    
-    session.remove::<PasskeyAuthentication>("authentication_state").await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    session.remove::<String>("auth_username").await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    session
+        .remove::<PasskeyAuthentication>("authentication_state")
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    session
+        .remove::<String>("auth_username")
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(true)
 }
 
 #[server(SuggestUpdate, "/api")]
-pub async fn suggest_update(pub_id: Uuid, suggested_data: serde_json::Value) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn suggest_update(
+    pub_id: Uuid,
+    suggested_data: serde_json::Value,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     sqlx::query!(
         "INSERT INTO suggested_updates (pub_id, user_id, suggested_data) VALUES ($1, $2, $3)",
-        pub_id, user.id, suggested_data
+        pub_id,
+        user.id,
+        suggested_data
     )
-    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(GetSuggestedUpdates, "/api")]
-pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::models::SuggestedUpdate>, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn get_suggested_updates(
+    status: Option<String>,
+) -> Result<Vec<crate::models::SuggestedUpdate>, ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1077,16 +1370,23 @@ pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::
 }
 
 #[server(ProcessSuggestedUpdate, "/api")]
-pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn process_suggested_update(
+    suggestion_id: Uuid,
+    approve: bool,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1098,19 +1398,17 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
         let suggestion = sqlx::query!(
             "SELECT pub_id, suggested_data FROM suggested_updates WHERE id = $1",
             suggestion_id
-        ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let data = suggestion.suggested_data;
-        
-        let parse_bool = |v: &serde_json::Value| {
-            v.as_bool().or_else(|| {
-                v.as_str().map(|s| s == "true")
-            })
-        };
 
-        let parse_str = |v: &serde_json::Value| {
-            v.as_str().map(|s| s.to_string())
-        };
+        let parse_bool =
+            |v: &serde_json::Value| v.as_bool().or_else(|| v.as_str().map(|s| s == "true"));
+
+        let parse_str = |v: &serde_json::Value| v.as_str().map(|s| s.to_string());
 
         // Patch the pub record
         sqlx::query!(
@@ -1135,22 +1433,40 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
             parse_str(&data["google_maps_id"]),
             parse_str(&data["untappd_id"]),
             suggestion.pub_id
-        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Update years if present
         if let Some(years) = data["years"].as_array() {
-            let years_vec: Vec<i32> = years.iter().filter_map(|v| {
-                v.as_i64().map(|y| y as i32)
-                    .or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
-            }).collect();
-            
+            let years_vec: Vec<i32> = years
+                .iter()
+                .filter_map(|v| {
+                    v.as_i64()
+                        .map(|y| y as i32)
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
+                })
+                .collect();
+
             // This is simple but effective: clear and re-insert
-            sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1", suggestion.pub_id)
-                .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-                
+            sqlx::query!(
+                "DELETE FROM gbg_history WHERE pub_id = $1",
+                suggestion.pub_id
+            )
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
             for year in years_vec {
-                sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)", suggestion.pub_id, year)
-                    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+                sqlx::query!(
+                    "INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)",
+                    suggestion.pub_id,
+                    year
+                )
+                .execute(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
             }
         }
     }
@@ -1163,8 +1479,14 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        user.id, format!("suggestion_{}", status), "suggestion", suggestion_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.id,
+        format!("suggestion_{}", status),
+        "suggestion",
+        suggestion_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
@@ -1177,15 +1499,19 @@ pub async fn bulk_update_pubs(
     closed: Option<bool>,
     untappd_verified: Option<bool>,
 ) -> Result<u64, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1219,19 +1545,21 @@ pub async fn bulk_update_pubs(
         binds.push(t.clone());
     }
     if let Some(ref o) = outcode {
-        query.push_str(&format!(" AND SPLIT_PART(postcode, ' ', 1) = ${}", param_idx));
-        param_idx += 1;
+        query.push_str(&format!(
+            " AND SPLIT_PART(postcode, ' ', 1) = ${}",
+            param_idx
+        ));
         binds.push(o.clone());
     }
 
     // This is a bit tricky with sqlx because of dynamic number of binds and types.
     // For now, we just implement a simplified version or use a macro if possible.
     // Given the constraints, I'll use a direct query for simple cases.
-    
+
     // ... bind manually based on what we added ...
     // Since this is complex to do generically in sqlx without a lot of boilerplate,
     // I'll stick to a more restricted but safe implementation if needed.
-    
+
     let res = sqlx::query::<sqlx::Postgres>("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
                            WHERE (region = $3 OR $3 IS NULL) 
                              AND (town = $4 OR $4 IS NULL) 
@@ -1241,23 +1569,33 @@ pub async fn bulk_update_pubs(
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        user.id, "bulk_update_criteria", "multiple", user.id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.id,
+        "bulk_update_criteria",
+        "multiple",
+        user.id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(res.rows_affected())
 }
 
 #[server(ExportUserVisits, "/api")]
 pub async fn export_user_visits(format: String) -> Result<String, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let visits = sqlx::query_as!(
         crate::models::VisitRecord,
@@ -1272,16 +1610,17 @@ pub async fn export_user_visits(format: String) -> Result<String, ServerFnError>
 
     match format.as_str() {
         "json" => {
-            let json = serde_json::to_string_pretty(&visits).map_err(|e| ServerFnError::new(e.to_string()))?;
+            let json = serde_json::to_string_pretty(&visits)
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
             Ok(json)
-        },
+        }
         "parquet" => {
-            use parquet::arrow::ArrowWriter;
-            use arrow::array::{StringArray, Date32Array};
+            use arrow::array::{Date32Array, StringArray};
+            use arrow::datatypes::{DataType, Field, Schema};
             use arrow::record_batch::RecordBatch;
-            use arrow::datatypes::{Schema, Field, DataType};
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
+            use parquet::arrow::ArrowWriter;
             use std::sync::Arc;
-            use base64::{Engine as _, engine::general_purpose::STANDARD};
 
             let schema = Arc::new(Schema::new(vec![
                 Field::new("visit_date", DataType::Date32, false),
@@ -1291,31 +1630,61 @@ pub async fn export_user_visits(format: String) -> Result<String, ServerFnError>
                 Field::new("notes", DataType::Utf8, true),
             ]));
 
-            let date_array = Date32Array::from(visits.iter().map(|v| {
-                // days since Unix epoch
-                let epoch = chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-                (v.visit_date - epoch).num_days() as i32
-            }).collect::<Vec<_>>());
-            let name_array = StringArray::from(visits.iter().map(|v| v.pub_name.as_str()).collect::<Vec<_>>());
-            let town_array = StringArray::from(visits.iter().map(|v| v.town.as_deref()).collect::<Vec<_>>());
-            let region_array = StringArray::from(visits.iter().map(|v| v.region.as_deref()).collect::<Vec<_>>());
-            let notes_array = StringArray::from(visits.iter().map(|v| v.notes.as_deref()).collect::<Vec<_>>());
+            let date_array = Date32Array::from(
+                visits
+                    .iter()
+                    .map(|v| {
+                        // days since Unix epoch
+                        let epoch = chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                        (v.visit_date - epoch).num_days() as i32
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            let name_array = StringArray::from(
+                visits
+                    .iter()
+                    .map(|v| v.pub_name.as_str())
+                    .collect::<Vec<_>>(),
+            );
+            let town_array =
+                StringArray::from(visits.iter().map(|v| v.town.as_deref()).collect::<Vec<_>>());
+            let region_array = StringArray::from(
+                visits
+                    .iter()
+                    .map(|v| v.region.as_deref())
+                    .collect::<Vec<_>>(),
+            );
+            let notes_array = StringArray::from(
+                visits
+                    .iter()
+                    .map(|v| v.notes.as_deref())
+                    .collect::<Vec<_>>(),
+            );
 
-            let batch = RecordBatch::try_new(schema.clone(), vec![
-                Arc::new(date_array),
-                Arc::new(name_array),
-                Arc::new(town_array),
-                Arc::new(region_array),
-                Arc::new(notes_array),
-            ]).map_err(|e| ServerFnError::new(e.to_string()))?;
+            let batch = RecordBatch::try_new(
+                schema.clone(),
+                vec![
+                    Arc::new(date_array),
+                    Arc::new(name_array),
+                    Arc::new(town_array),
+                    Arc::new(region_array),
+                    Arc::new(notes_array),
+                ],
+            )
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             let mut buf = Vec::new();
-            let mut writer = ArrowWriter::try_new(&mut buf, schema, None).map_err(|e| ServerFnError::new(e.to_string()))?;
-            writer.write(&batch).map_err(|e| ServerFnError::new(e.to_string()))?;
-            writer.close().map_err(|e| ServerFnError::new(e.to_string()))?;
+            let mut writer = ArrowWriter::try_new(&mut buf, schema, None)
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            writer
+                .write(&batch)
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            writer
+                .close()
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             Ok(STANDARD.encode(buf))
-        },
+        }
         _ => {
             // Default to CSV
             let mut csv = String::from("date,pub_name,town,region,notes\n");
@@ -1336,15 +1705,19 @@ pub async fn export_user_visits(format: String) -> Result<String, ServerFnError>
 
 #[server(CreateInvite, "/api")]
 pub async fn create_invite(role: String) -> Result<Uuid, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let admin = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if admin.role != "admin" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1354,32 +1727,44 @@ pub async fn create_invite(role: String) -> Result<Uuid, ServerFnError> {
 
     // Use query_scalar (non-macro) to avoid OffsetDateTime issues with macros
     let invite_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id"
+        "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(&role)
     .bind(expires_at)
     .bind(admin.id)
-    .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        admin.id, format!("create_invite:{}", role), "invite", invite_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        admin.id,
+        format!("create_invite:{}", role),
+        "invite",
+        invite_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(invite_id)
 }
 
 #[server(GetPendingInvites, "/api")]
 pub async fn get_pending_invites() -> Result<Vec<UserInvite>, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1399,35 +1784,45 @@ pub async fn get_pending_invites() -> Result<Vec<UserInvite>, ServerFnError> {
 
 #[server(RevokeInvite, "/api")]
 pub async fn revoke_invite(invite_id: Uuid) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let admin = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if admin.role != "admin" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
     sqlx::query!("DELETE FROM user_invites WHERE id = $1", invite_id)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        admin.id, "revoke_invite", "invite", invite_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        admin.id,
+        "revoke_invite",
+        "invite",
+        invite_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(ValidateInvite, "/api")]
 pub async fn validate_invite(invite_id: Uuid) -> Result<Option<String>, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
+    use sqlx::PgPool;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
@@ -1440,17 +1835,23 @@ pub async fn validate_invite(invite_id: Uuid) -> Result<Option<String>, ServerFn
 }
 
 #[server(RegisterUser, "/api")]
-pub async fn register_user(invite_id: Uuid, username: String, password: String) -> Result<bool, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
+pub async fn register_user(
+    invite_id: Uuid,
+    username: String,
+    password: String,
+) -> Result<bool, ServerFnError> {
+    use crate::auth::{session, User};
     use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-    use rand::rngs::OsRng;
-    use tower_sessions::Session;
+    use leptos::context::use_context;
     use leptos_axum::extract;
-    use crate::auth::{User, session};
+    use rand::rngs::OsRng;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 1. Verify invite
     let invite = sqlx::query!(
@@ -1475,8 +1876,11 @@ pub async fn register_user(invite_id: Uuid, username: String, password: String) 
     let mut totp_secret = vec![0u8; 20];
     getrandom::getrandom(&mut totp_secret).map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let mut tx = pool.begin().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let user_id = sqlx::query_scalar!(
         "INSERT INTO users (username, password_hash, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash) 
          VALUES ($1, $2, $3, false, $4, $5) RETURNING id",
@@ -1486,51 +1890,70 @@ pub async fn register_user(invite_id: Uuid, username: String, password: String) 
     sqlx::query!(
         "UPDATE user_invites SET used_at = CURRENT_TIMESTAMP WHERE id = $1",
         invite_id
-    ).execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    tx.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    tx.commit()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 4. Log in the new user
-    session::login(&session, &User {
-        id: user_id,
-        username: username.clone(),
-        role: role.clone(),
-        totp_setup_completed: false,
-    }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    session::login(
+        &session,
+        &User {
+            id: user_id,
+            username: username.clone(),
+            role: role.clone(),
+            totp_setup_completed: false,
+        },
+    )
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(true)
 }
 
 #[server(GetAuditLogs, "/api")]
-pub async fn get_audit_logs(search: String, limit: i64) -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
+pub async fn get_audit_logs(
+    search: String,
+    limit: i64,
+) -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
     use crate::auth::session;
     use crate::models::AuditLogEntry;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
-    let limit = limit.min(500).max(1); // Cap at 500
+    let limit = limit.clamp(1, 500); // Cap at 500
 
-    let mut query = String::from(r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
+    let mut query = String::from(
+        r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
            FROM audit_log l
            JOIN users u ON l.user_id = u.id
-           WHERE 1=1"#);
-    
+           WHERE 1=1"#,
+    );
+
     if !search.is_empty() {
         query.push_str(&format!(" AND (u.username ILIKE '%{0}%' OR l.action ILIKE '%{0}%' OR l.entity_type ILIKE '%{0}%')", search.replace("'", "''")));
     }
-    
+
     query.push_str(&format!(" ORDER BY l.timestamp DESC LIMIT {}", limit));
 
     let logs = sqlx::query_as::<sqlx::Postgres, AuditLogEntry>(&query)
@@ -1543,36 +1966,42 @@ pub async fn get_audit_logs(search: String, limit: i64) -> Result<Vec<crate::mod
 
 #[server(Logout, "/api")]
 pub async fn logout() -> Result<(), ServerFnError> {
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
 
-    let session = extract::<Session>().await
+    let session = extract::<Session>()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    session::logout(&session).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    session::logout(&session)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     leptos_axum::redirect("/login");
     Ok(())
 }
 
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    
+
     if let Ok(s) = extract::<Session>().await {
         if let Some(user_session) = session::get_user(&s).await {
             // Fetch fresh data from DB
             let user = sqlx::query!(
                 "SELECT id, username, role, totp_setup_completed FROM users WHERE id = $1",
                 user_session.id
-            ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            )
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             Ok(Some(User {
                 id: user.id,
@@ -1590,23 +2019,28 @@ pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
 
 #[server(CheckUserAuthType, "/api")]
 pub async fn check_user_auth_type(username: String) -> Result<UserAuthStatus, ServerFnError> {
-    use sqlx::PgPool;
     use leptos::context::use_context;
+    use sqlx::PgPool;
     use sqlx::Row;
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
     let user = sqlx::query("SELECT id, totp_setup_completed FROM users WHERE username = $1")
         .bind(&username)
-        .fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     match user {
         Some(u) => {
             let user_id: uuid::Uuid = u.get("id");
             let setup_completed: bool = u.get("totp_setup_completed");
-            
-            let passkeys_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_credentials WHERE user_id = $1")
-                .bind(user_id)
-                .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+            let passkeys_count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM user_credentials WHERE user_id = $1")
+                    .bind(user_id)
+                    .fetch_one(&pool)
+                    .await
+                    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             Ok(UserAuthStatus {
                 user_id: Some(user_id),
@@ -1618,27 +2052,32 @@ pub async fn check_user_auth_type(username: String) -> Result<UserAuthStatus, Se
             user_id: None,
             has_passkeys: false,
             totp_required: false,
-        })
+        }),
     }
 }
 
 #[server(GetTotpSetupInfo, "/api")]
 pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
-    use tower_sessions::Session;
-    use crate::auth::session;
+    use sqlx::PgPool;
     use totp_rs::{Algorithm, TOTP};
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let user_data = sqlx::query!(
         "SELECT username, totp_secret_enc FROM users WHERE id = $1",
         user.id
-    ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // Generate secret if missing (empty)
     let secret_bytes = if !user_data.totp_secret_enc.is_empty() {
@@ -1647,12 +2086,16 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
         use rand::RngCore;
         let mut new_secret = vec![0u8; 20];
         rand::thread_rng().fill_bytes(&mut new_secret);
-        
+
         sqlx::query!(
             "UPDATE users SET totp_secret_enc = $1 WHERE id = $2",
-            &new_secret, user.id
-        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-        
+            &new_secret,
+            user.id
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
         new_secret
     };
 
@@ -1664,7 +2107,8 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
         secret_bytes,
         Some("GBGData".to_string()),
         user_data.username.clone(),
-    ).map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let otp_url = totp.get_url();
     if otp_url.is_empty() {
@@ -1673,25 +2117,35 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
 
     let qr_code_svg = {
         use qrcodegen::{QrCode, QrCodeEcc};
-        let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium).map_err(|e| ServerFnError::new(e.to_string()))?;
+        let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium)
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
         let size = qr.size();
         let border = 4;
         let total_size = size + border * 2;
-        
+
         let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {0} {0}\" shape-rendering=\"crispEdges\" style=\"background: white; padding: 10px; border-radius: 8px;\">\n", total_size);
-        svg.push_str(&format!("  <rect width=\"{}\" height=\"{}\" fill=\"white\" />\n", total_size, total_size));
-        svg.push_str(&format!("  <g transform=\"translate({}, {})\" fill=\"black\">\n", border, border));
+        svg.push_str(&format!(
+            "  <rect width=\"{}\" height=\"{}\" fill=\"white\" />\n",
+            total_size, total_size
+        ));
+        svg.push_str(&format!(
+            "  <g transform=\"translate({}, {})\" fill=\"black\">\n",
+            border, border
+        ));
         for y in 0..size {
             for x in 0..size {
                 if qr.get_module(x, y) {
-                    svg.push_str(&format!("    <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n", x, y));
+                    svg.push_str(&format!(
+                        "    <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n",
+                        x, y
+                    ));
                 }
             }
         }
         svg.push_str("  </g>\n</svg>");
         svg
     };
-    
+
     let secret = totp.get_secret_base32();
 
     Ok(serde_json::json!({
@@ -1702,17 +2156,21 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
 }
 
 #[server(VerifyAndCompleteTotpSetup, "/api")]
-pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Result<bool, ServerFnError> {
-    use sqlx::PgPool;
+pub async fn verify_and_complete_totp_setup(
+    user_id: Uuid,
+    code: String,
+) -> Result<bool, ServerFnError> {
+    use crate::auth::{session, verify_totp, User};
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::{verify_totp, User, session};
-    
-    let pool = use_context::<PgPool>()
-        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let session = extract::<Session>().await
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>()
+        .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let user_data = sqlx::query!(
@@ -1732,12 +2190,17 @@ pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Resu
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        session::login(&session, &User {
-            id: user_data.id,
-            username: user_data.username,
-            role: user_data.role,
-            totp_setup_completed: true,
-        }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        session::login(
+            &session,
+            &User {
+                id: user_data.id,
+                username: user_data.username,
+                role: user_data.role,
+                totp_setup_completed: true,
+            },
+        )
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         Ok(true)
     } else {
@@ -1746,16 +2209,22 @@ pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Resu
 }
 
 #[server(GetMissingDataReports, "/api")]
-pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSummary>, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
+pub async fn get_missing_data_reports(
+    report_type: String,
+) -> Result<Vec<PubSummary>, ServerFnError> {
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
@@ -1769,43 +2238,57 @@ pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSumm
     };
 
     let pubs = sqlx::query_as::<sqlx::Postgres, PubSummary>(query)
-        .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(pubs)
 }
 
 #[server(GetMyPasskeys, "/api")]
 pub async fn get_my_passkeys() -> Result<Vec<crate::models::UserCredential>, ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     let passkeys = sqlx::query_as!(
         crate::models::UserCredential,
         "SELECT user_id, credential_id, public_key FROM user_credentials WHERE user_id = $1",
         user.id
-    ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(passkeys)
 }
 
 #[server(GetUsers, "/api")]
-pub async fn get_users(search: String, role_filter: String) -> Result<Vec<UserManagementEntry>, ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
+pub async fn get_users(
+    search: String,
+    role_filter: String,
+) -> Result<Vec<UserManagementEntry>, ServerFnError> {
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
-    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let session = extract::<Session>()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1813,7 +2296,10 @@ pub async fn get_users(search: String, role_filter: String) -> Result<Vec<UserMa
 
     let mut query = String::from("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
     if !search.is_empty() {
-        query.push_str(&format!(" AND username ILIKE '%{}%'", search.replace("'", "''")));
+        query.push_str(&format!(
+            " AND username ILIKE '%{}%'",
+            search.replace("'", "''")
+        ));
     }
     if role_filter != "all" {
         query.push_str(&format!(" AND role = '{}'", role_filter.replace("'", "''")));
@@ -1821,22 +2307,26 @@ pub async fn get_users(search: String, role_filter: String) -> Result<Vec<UserMa
     query.push_str(" ORDER BY username ASC");
 
     let users = sqlx::query_as::<sqlx::Postgres, UserManagementEntry>(&query)
-        .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(users)
 }
 
 #[server(UpdateUserRole, "/api")]
 pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let admin = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1844,7 +2334,9 @@ pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), Ser
 
     // Only owners can promote to owner or change owner's role
     let current_role = sqlx::query_scalar!("SELECT role FROM users WHERE id = $1", user_id)
-        .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     if (new_role == "owner" || current_role == "owner") && admin.role != "owner" {
         return Err(ServerFnError::new("Only the owner can transfer ownership"));
@@ -1852,9 +2344,13 @@ pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), Ser
 
     // If demoting an admin, ensure they aren't the last one
     if new_role != "admin" && new_role != "owner" && current_role == "admin" {
-        let admin_count = sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
-            .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
-        
+        let admin_count =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?
+                .unwrap_or(0);
+
         if admin_count <= 1 {
             return Err(ServerFnError::new("Cannot demote the last administrator"));
         }
@@ -1863,31 +2359,47 @@ pub async fn update_user_role(user_id: Uuid, new_role: String) -> Result<(), Ser
     // If transferring ownership, demote old owner to admin
     if new_role == "owner" {
         sqlx::query!("UPDATE users SET role = 'admin' WHERE role = 'owner'")
-            .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
     }
 
-    sqlx::query!("UPDATE users SET role = $1 WHERE id = $2", new_role, user_id)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    sqlx::query!(
+        "UPDATE users SET role = $1 WHERE id = $2",
+        new_role,
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        admin.id, format!("update_role:{}", new_role), "user", user_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        admin.id,
+        format!("update_role:{}", new_role),
+        "user",
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(ResetUser2FA, "/api")]
 pub async fn reset_user_2fa(user_id: Uuid) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let admin = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1899,28 +2411,40 @@ pub async fn reset_user_2fa(user_id: Uuid) -> Result<(), ServerFnError> {
 
     sqlx::query!(
         "UPDATE users SET totp_setup_completed = false, totp_secret_enc = $1 WHERE id = $2",
-        new_secret, user_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        new_secret,
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        admin.id, "reset_2fa", "user", user_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        admin.id,
+        "reset_2fa",
+        "user",
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(DeleteUser, "/api")]
 pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
-    use leptos::context::use_context;
-    use tower_sessions::Session;
-    use leptos_axum::extract;
     use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let admin = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if admin.role != "admin" && admin.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
@@ -1931,16 +2455,24 @@ pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
     }
 
     let target_role = sqlx::query_scalar!("SELECT role FROM users WHERE id = $1", user_id)
-        .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     if target_role == "owner" {
-        return Err(ServerFnError::new("You cannot delete the owner. Transfer the role first."));
+        return Err(ServerFnError::new(
+            "You cannot delete the owner. Transfer the role first.",
+        ));
     }
 
     if target_role == "admin" {
-        let admin_count = sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
-            .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
-        
+        let admin_count =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'owner')")
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?
+                .unwrap_or(0);
+
         if admin_count <= 1 {
             return Err(ServerFnError::new("Cannot delete the last administrator"));
         }
@@ -1948,31 +2480,49 @@ pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
 
     // Delete related data
     sqlx::query!("DELETE FROM user_visits WHERE user_id = $1", user_id)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     sqlx::query!("DELETE FROM user_credentials WHERE user_id = $1", user_id)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
     sqlx::query!("DELETE FROM users WHERE id = $1", user_id)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
-        admin.id, "delete_user", "user", user_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        admin.id,
+        "delete_user",
+        "user",
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
 
 #[server(BulkUpdatePubsList, "/api")]
-pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+pub async fn bulk_update_pubs_list(
+    ids: Vec<Uuid>,
+    action: String,
+    value: String,
+) -> Result<(), ServerFnError> {
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Only admins can perform bulk updates"));
@@ -1983,33 +2533,51 @@ pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String
             "mark_closed" => {
                 let is_closed = value == "true";
                 sqlx::query!("UPDATE pubs SET closed = $1 WHERE id = $2", is_closed, id)
-                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-                
+                    .execute(&pool)
+                    .await
+                    .map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+
                 sqlx::query!(
                     "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
                     user.id, format!("bulk_update:closed={}", is_closed), "pub", id
                 ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-            },
+            }
             "add_year" => {
-                let year: i32 = value.parse().map_err(|_| ServerFnError::new("Invalid year"))?;
-                sqlx::query!("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2) ON CONFLICT DO NOTHING", id, year)
-                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-                
+                let year: i32 = value
+                    .parse()
+                    .map_err(|_| ServerFnError::new("Invalid year"))?;
+                sqlx::query!(
+                    "INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    id,
+                    year
+                )
+                .execute(&pool)
+                .await
+                .map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+
                 sqlx::query!(
                     "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
                     user.id, format!("bulk_update:add_year={}", year), "pub", id
                 ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-            },
+            }
             "remove_year" => {
-                let year: i32 = value.parse().map_err(|_| ServerFnError::new("Invalid year"))?;
-                sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1 AND year = $2", id, year)
-                    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-                
+                let year: i32 = value
+                    .parse()
+                    .map_err(|_| ServerFnError::new("Invalid year"))?;
+                sqlx::query!(
+                    "DELETE FROM gbg_history WHERE pub_id = $1 AND year = $2",
+                    id,
+                    year
+                )
+                .execute(&pool)
+                .await
+                .map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+
                 sqlx::query!(
                     "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
                     user.id, format!("bulk_update:remove_year={}", year), "pub", id
                 ).execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
-            },
+            }
             _ => return Err(ServerFnError::new("Unsupported bulk action")),
         }
     }
@@ -2019,20 +2587,26 @@ pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String
 
 #[server(DeletePasskey, "/api")]
 pub async fn delete_passkey(credential_id: Vec<u8>) -> Result<(), ServerFnError> {
-    use sqlx::PgPool;
+    use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
+    use sqlx::PgPool;
     use tower_sessions::Session;
-    use crate::auth::session;
 
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
     let session = extract::<Session>().await?;
-    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
     sqlx::query!(
         "DELETE FROM user_credentials WHERE user_id = $1 AND credential_id = $2",
-        user.id, credential_id
-    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        user.id,
+        credential_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(())
 }
