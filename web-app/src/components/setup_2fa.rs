@@ -10,9 +10,30 @@ pub fn Setup2FA() -> impl IntoView {
     let (_code, set_code) = signal(String::new());
     let navigate = leptos_router::hooks::use_navigate();
 
+    let nav = navigate.clone();
     Effect::new(move |_| {
-        if let Some(Ok(true)) = verify_action.value().get() {
-            navigate("/admin", Default::default());
+        if let Some(Ok(Some(u))) = user.get() {
+            if u.totp_setup_completed {
+                nav("/admin", Default::default());
+            }
+        }
+    });
+
+    let nav = navigate.clone();
+    Effect::new(move |_| {
+        if let Some(res) = verify_action.value().get() {
+            match res {
+                Ok(true) => {
+                    user.refetch();
+                    nav("/admin", Default::default());
+                }
+                Ok(false) => {
+                    leptos::logging::log!("2FA verification failed: incorrect code");
+                }
+                Err(e) => {
+                    leptos::logging::log!("2FA verification error: {:?}", e);
+                }
+            }
         }
     });
 
