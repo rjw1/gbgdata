@@ -284,13 +284,13 @@ pub fn LocationPubList() -> impl IntoView {
                 <div class="header-controls">
                     <div class="view-toggle">
                         <button 
-                            class=move || format!("toggle-btn {}", if view_mode.get() == ViewMode::List { "active" } else { "" })
+                            class=move || format!("btn {} {}", if view_mode.get() == ViewMode::List { "btn-primary" } else { "btn-ghost" }, if view_mode.get() == ViewMode::List { "active" } else { "" })
                             on:click=move |_| set_view_mode.set(ViewMode::List)
                         >
                             "📋 List"
                         </button>
                         <button 
-                            class=move || format!("toggle-btn {}", if view_mode.get() == ViewMode::Map { "active" } else { "" })
+                            class=move || format!("btn {} {}", if view_mode.get() == ViewMode::Map { "btn-primary" } else { "btn-ghost" }, if view_mode.get() == ViewMode::Map { "active" } else { "" })
                             on:click=move |_| set_view_mode.set(ViewMode::Map)
                         >
                             "🗺️ Map"

@@ -150,10 +150,10 @@ pub fn NearMe() -> impl IntoView {
                         } }
                         prop:value=search_text
                     />
-                    <button class="location-btn" on:click=handle_search disabled=loading>
+                    <button class="btn btn-primary" on:click=handle_search disabled=loading>
                         "🔍 Search"
                     </button>
-                    <button class="gps-btn" on:click=get_gps disabled=loading>
+                    <button class="btn btn-secondary" on:click=get_gps disabled=loading>
                         "📍 Use GPS"
                     </button>
                 </div>

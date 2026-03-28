@@ -71,7 +71,7 @@ pub fn PubList() -> impl IntoView {
                     on_change=Callback::new(move |mode| set_sort.set(mode)) 
                 />
                 <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
-                    <button class="bulk-toggle-btn" on:click=move |_| set_bulk_mode.update(|b| *b = !*b)>
+                    <button class="btn btn-secondary" on:click=move |_| set_bulk_mode.update(|b| *b = !*b)>
                         {move || if bulk_mode.get() { "Cancel Bulk Edit" } else { "Bulk Edit" }}
                     </button>
                 </Show>
@@ -86,7 +86,7 @@ pub fn PubList() -> impl IntoView {
                         <option value="remove_year">"Remove GBG Year"</option>
                     </select>
                     <input type="text" value=bulk_value on:input=move |ev| set_bulk_value.set(event_target_value(&ev)) />
-                    <button on:click=on_bulk_apply disabled=move || selected_ids.get().is_empty() || bulk_update_action.pending().get()>
+                    <button class="btn btn-primary" on:click=on_bulk_apply disabled=move || selected_ids.get().is_empty() || bulk_update_action.pending().get()>
                         "Apply to Selected"
                     </button>
                 </div>
