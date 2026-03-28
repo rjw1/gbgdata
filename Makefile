@@ -36,7 +36,7 @@ security:
 
 # End-to-end tests (requires live server)
 e2e:
-	cd web-app/end2end && npm test
+	cd web-app/end2end && npm install && npm test
 
 # Cleanup
 clean:
