@@ -683,7 +683,7 @@ pub async fn get_user_visits() -> Result<Vec<crate::models::VisitRecord>, Server
 
     let visits = sqlx::query_as!(
         crate::models::VisitRecord,
-        r#"SELECT v.id, v.pub_id, p.name as "pub_name", v.visit_date as "visit_date: chrono::NaiveDate", v.notes
+        r#"SELECT v.id, v.pub_id, p.name as "pub_name", p.town, p.region, v.visit_date as "visit_date: chrono::NaiveDate", v.notes
            FROM user_visits v
            JOIN pubs p ON v.pub_id = p.id
            WHERE v.user_id = $1
@@ -1210,7 +1210,7 @@ pub async fn bulk_update_pubs(
 }
 
 #[server(ExportUserVisits, "/api")]
-pub async fn export_user_visits() -> Result<String, ServerFnError> {
+pub async fn export_user_visits(format: String) -> Result<String, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
     use leptos_axum::extract;
@@ -1221,8 +1221,9 @@ pub async fn export_user_visits() -> Result<String, ServerFnError> {
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    let visits = sqlx::query!(
-        r#"SELECT v.visit_date as "visit_date: chrono::NaiveDate", p.name, p.town, p.region, v.notes
+    let visits = sqlx::query_as!(
+        crate::models::VisitRecord,
+        r#"SELECT v.id, v.pub_id, p.name as "pub_name", p.town, p.region, v.visit_date as "visit_date: chrono::NaiveDate", v.notes
            FROM user_visits v
            JOIN pubs p ON v.pub_id = p.id
            WHERE v.user_id = $1
@@ -1231,19 +1232,68 @@ pub async fn export_user_visits() -> Result<String, ServerFnError> {
     )
     .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    let mut csv = String::from("date,pub_name,town,region,notes\n");
-    for v in visits {
-        csv.push_str(&format!(
-            "{},\"{}\",\"{}\",\"{}\",\"{}\"\n",
-            v.visit_date,
-            v.name.replace("\"", "\"\""),
-            v.town.unwrap_or_default().replace("\"", "\"\""),
-            v.region.unwrap_or_default().replace("\"", "\"\""),
-            v.notes.unwrap_or_default().replace("\"", "\"\"")
-        ));
-    }
+    match format.as_str() {
+        "json" => {
+            let json = serde_json::to_string_pretty(&visits).map_err(|e| ServerFnError::new(e.to_string()))?;
+            Ok(json)
+        },
+        "parquet" => {
+            use parquet::arrow::ArrowWriter;
+            use arrow::array::{StringArray, Date32Array};
+            use arrow::record_batch::RecordBatch;
+            use arrow::datatypes::{Schema, Field, DataType};
+            use std::sync::Arc;
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-    Ok(csv)
+            let schema = Arc::new(Schema::new(vec![
+                Field::new("visit_date", DataType::Date32, false),
+                Field::new("pub_name", DataType::Utf8, false),
+                Field::new("town", DataType::Utf8, true),
+                Field::new("region", DataType::Utf8, true),
+                Field::new("notes", DataType::Utf8, true),
+            ]));
+
+            let date_array = Date32Array::from(visits.iter().map(|v| {
+                // days since Unix epoch
+                let epoch = chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                (v.visit_date - epoch).num_days() as i32
+            }).collect::<Vec<_>>());
+            let name_array = StringArray::from(visits.iter().map(|v| v.pub_name.as_str()).collect::<Vec<_>>());
+            let town_array = StringArray::from(visits.iter().map(|v| v.town.as_deref()).collect::<Vec<_>>());
+            let region_array = StringArray::from(visits.iter().map(|v| v.region.as_deref()).collect::<Vec<_>>());
+            let notes_array = StringArray::from(visits.iter().map(|v| v.notes.as_deref()).collect::<Vec<_>>());
+
+            let batch = RecordBatch::try_new(schema.clone(), vec![
+                Arc::new(date_array),
+                Arc::new(name_array),
+                Arc::new(town_array),
+                Arc::new(region_array),
+                Arc::new(notes_array),
+            ]).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+            let mut buf = Vec::new();
+            let mut writer = ArrowWriter::try_new(&mut buf, schema, None).map_err(|e| ServerFnError::new(e.to_string()))?;
+            writer.write(&batch).map_err(|e| ServerFnError::new(e.to_string()))?;
+            writer.close().map_err(|e| ServerFnError::new(e.to_string()))?;
+
+            Ok(STANDARD.encode(buf))
+        },
+        _ => {
+            // Default to CSV
+            let mut csv = String::from("date,pub_name,town,region,notes\n");
+            for v in visits {
+                csv.push_str(&format!(
+                    "{},\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                    v.visit_date,
+                    v.pub_name.replace("\"", "\"\""),
+                    v.town.unwrap_or_default().replace("\"", "\"\""),
+                    v.region.unwrap_or_default().replace("\"", "\"\""),
+                    v.notes.unwrap_or_default().replace("\"", "\"\"")
+                ));
+            }
+            Ok(csv)
+        }
+    }
 }
 
 #[server(CreateInvite, "/api")]

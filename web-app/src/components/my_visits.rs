@@ -8,27 +8,43 @@ use leptos::wasm_bindgen::{JsCast, JsValue};
 pub fn MyVisits() -> impl IntoView {
     let visits = Resource::new(|| (), |_| get_user_visits());
     let (view_mode, set_view_mode) = signal(String::from("list"));
+    let (export_format, set_export_format) = signal(String::new());
     
     let export_action = ServerAction::<ExportUserVisits>::new();
 
-    let on_export = move |_| {
-        export_action.dispatch(ExportUserVisits {});
+    let on_export = move |fmt: &str| {
+        set_export_format.set(fmt.to_string());
+        export_action.dispatch(ExportUserVisits { format: fmt.to_string() });
     };
 
     Effect::new(move |_| {
-        if let Some(Ok(csv_data)) = export_action.value().get() {
-            // Basic browser-side download of CSV
+        if let Some(Ok(data)) = export_action.value().get() {
+            let fmt = export_format.get();
+            let (filename, mime_type, is_base64) = match fmt.as_str() {
+                "json" => ("my_visits.json", "application/json", false),
+                "parquet" => ("my_visits.parquet", "application/octet-stream", true),
+                _ => ("my_visits.csv", "text/csv", false),
+            };
+
             let window = web_sys::window().unwrap();
             let document = window.document().unwrap();
             let link = document.create_element("a").unwrap().dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
-            let blob_parts = js_sys::Array::new();
-            blob_parts.push(&JsValue::from_str(&csv_data));
-            let blob = web_sys::Blob::new_with_str_sequence(&blob_parts).unwrap();
-            let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+            
+            let url = if is_base64 {
+                format!("data:{};base64,{}", mime_type, data)
+            } else {
+                let blob_parts = js_sys::Array::new();
+                blob_parts.push(&JsValue::from_str(&data));
+                let blob = web_sys::Blob::new_with_str_sequence(&blob_parts).unwrap();
+                web_sys::Url::create_object_url_with_blob(&blob).unwrap()
+            };
+
             link.set_href(&url);
-            link.set_download("my_visits.csv");
+            link.set_download(filename);
             link.click();
-            web_sys::Url::revoke_object_url(&url).unwrap();
+            if !is_base64 {
+                web_sys::Url::revoke_object_url(&url).unwrap();
+            }
         }
     });
 
@@ -92,9 +108,18 @@ pub fn MyVisits() -> impl IntoView {
                                         <span class="stat-label">"Total Visits"</span>
                                     </div>
                                     <div class="stat-card action-card">
-                                        <button class="export-btn" on:click=on_export disabled=export_action.pending()>
-                                            {move || if export_action.pending().get() { "Exporting..." } else { "Export CSV" }}
-                                        </button>
+                                        <div class="export-buttons">
+                                            <button class="export-btn" on:click=move |_| on_export("csv") disabled=export_action.pending()>
+                                                {move || if export_action.pending().get() && export_format.get() == "csv" { "..." } else { "CSV" }}
+                                            </button>
+                                            <button class="export-btn" on:click=move |_| on_export("json") disabled=export_action.pending()>
+                                                {move || if export_action.pending().get() && export_format.get() == "json" { "..." } else { "JSON" }}
+                                            </button>
+                                            <button class="export-btn" on:click=move |_| on_export("parquet") disabled=export_action.pending()>
+                                                {move || if export_action.pending().get() && export_format.get() == "parquet" { "..." } else { "Parquet" }}
+                                            </button>
+                                        </div>
+                                        <span class="stat-label">"Export Data"</span>
                                     </div>
                                 </div>
 

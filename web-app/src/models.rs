@@ -108,6 +108,8 @@ pub struct VisitRecord {
     pub id: Uuid,
     pub pub_id: Uuid,
     pub pub_name: String,
+    pub town: Option<String>,
+    pub region: Option<String>,
     pub visit_date: chrono::NaiveDate,
     pub notes: Option<String>,
 }
