@@ -17,6 +17,8 @@ pub struct ImportPub {
     pub closed: bool,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
+    pub untappd_id: Option<String>,
+    pub untappd_verified: bool,
     pub years: Vec<i32>,
 }
 
@@ -64,6 +66,8 @@ pub fn parse_excel(path: &str) -> Result<Vec<ImportPub>> {
                 closed,
                 lat: None,
                 lon: None,
+                untappd_id: None,
+                untappd_verified: false,
                 years,
             });
         }

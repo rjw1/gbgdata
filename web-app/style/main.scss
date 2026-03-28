@@ -451,6 +451,21 @@ nav a {
   font-weight: bold;
 }
 
+.verified-badge {
+  color: var(--open);
+  font-weight: bold;
+}
+
+.menu-link {
+  font-size: 0.9rem;
+  font-style: italic;
+  opacity: 0.8;
+  
+  &:hover {
+    opacity: 1;
+  }
+}
+
 .stats-dashboard {
   display: flex;
   justify-content: space-around;

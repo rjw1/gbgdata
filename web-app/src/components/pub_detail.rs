@@ -116,7 +116,24 @@ pub fn PubDetail() -> impl IntoView {
                                             <ul>
                                                 {whatpub.map(|id| view! { <li><a href=format!("https://whatpub.com/pubs/{}", id) target="_blank">"WhatPub"</a></li> })}
                                                 {gmaps.map(|id| view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> })}
-                                                {untappd.map(|id| view! { <li><a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a></li> })}
+                                                {untappd.map(|id| {
+                                                    let verified = p.untappd_verified;
+                                                    view! {
+                                                        <li>
+                                                            <a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a>
+                                                            {if verified {
+                                                                view! { 
+                                                                    <span class="verified-badge" title="Verified on Untappd">" ✓"</span> 
+                                                                    " ("
+                                                                    <a href=format!("https://untappd.com/venue/{}/menu", id) target="_blank" class="menu-link">"Menu"</a>
+                                                                    ")"
+                                                                }.into_any()
+                                                            } else {
+                                                                "".into_any()
+                                                            }}
+                                                        </li>
+                                                    }
+                                                })}
                                             </ul>
                                         </div>
                                     </div>

@@ -43,6 +43,7 @@ pub struct PubDetail {
     pub google_maps_id: Option<String>,
     pub whatpub_id: Option<String>,
     pub rgl_id: Option<String>,
+    pub untappd_verified: bool,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
     pub current_streak: i32,

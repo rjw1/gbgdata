@@ -35,6 +35,8 @@ pub fn parse_csv(path: &str) -> Result<Vec<ImportPub>> {
                 closed: record.get("closed").map(|s| s == "true").unwrap_or(false),
                 lat: record.get("lat").and_then(|s| s.parse::<f64>().ok()),
                 lon: record.get("lon").and_then(|s| s.parse::<f64>().ok()),
+                untappd_id: record.get("untappd_id").map(|s| s.trim().to_string()),
+                untappd_verified: record.get("untappd_verified").map(|s| s == "true").unwrap_or(false),
                 years,
             });
         }
@@ -98,6 +100,8 @@ pub fn parse_parquet(path: &str) -> Result<Vec<ImportPub>> {
                     closed: closed_col.value(i),
                     lat: if lat_col.is_null(i) { None } else { Some(lat_col.value(i)) },
                     lon: if lon_col.is_null(i) { None } else { Some(lon_col.value(i)) },
+                    untappd_id: None, // Parquet schema doesn't have these yet
+                    untappd_verified: false,
                     years: Vec::new(),
                 });
             }
