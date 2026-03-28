@@ -1,22 +1,25 @@
+use crate::server::RegisterUser;
 use leptos::prelude::*;
-use crate::server::{ValidateInvite, RegisterUser};
 use uuid::Uuid;
 
 #[component]
 pub fn RegisterPage() -> impl IntoView {
     let query_params = leptos_router::hooks::use_params_map();
-    let invite_id_str = move || query_params.get().get("invite").map(|s| s.to_string()).unwrap_or_default();
+    let invite_id_str = move || {
+        query_params
+            .get()
+            .get("invite")
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    };
     let invite_id = move || Uuid::parse_str(&invite_id_str()).ok();
 
-    let invite_status = Resource::new(
-        move || invite_id(),
-        |id| async move {
-            match id {
-                Some(uuid) => crate::server::validate_invite(uuid).await,
-                None => Ok(None),
-            }
+    let invite_status = Resource::new(invite_id, |id| async move {
+        match id {
+            Some(uuid) => crate::server::validate_invite(uuid).await,
+            None => Ok(None),
         }
-    );
+    });
 
     let register_action = ServerAction::<RegisterUser>::new();
     let (username, set_username) = signal(String::new());

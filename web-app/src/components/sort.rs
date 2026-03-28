@@ -1,5 +1,5 @@
-use leptos::prelude::*;
 use crate::models::SortMode;
+use leptos::prelude::*;
 
 #[component]
 pub fn SortSelector(
@@ -10,7 +10,7 @@ pub fn SortSelector(
     view! {
         <div class="sort-selector">
             <span class="sort-label">"Sort by: "</span>
-            <select 
+            <select
                 on:change=move |ev| {
                     let val = event_target_value(&ev);
                     let mode = match val.as_str() {

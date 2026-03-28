@@ -1,10 +1,10 @@
+use crate::components::sort::SortSelector;
+use crate::models::SortMode;
+use crate::server::{geocode_manual, get_nearby_pubs};
+use leptos::ev;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos::ev;
 use leptos_router::components::A;
-use crate::server::{get_nearby_pubs, geocode_manual};
-use crate::models::{SortMode};
-use crate::components::sort::SortSelector;
 #[cfg(feature = "hydrate")]
 use serde::{Deserialize, Serialize};
 
@@ -58,7 +58,7 @@ pub fn NearMe() -> impl IntoView {
             sort: sort.get(),
             open_only: open_only.get(),
         };
-        
+
         let storage = window().local_storage().ok().flatten();
         if let Some(storage) = storage {
             if let Ok(json) = serde_json::to_string(&state) {
@@ -75,13 +75,13 @@ pub fn NearMe() -> impl IntoView {
             } else {
                 Ok(Vec::new())
             }
-        }
+        },
     );
 
     let get_gps = move |_| {
         set_loading.set(true);
         set_error.set(None);
-        
+
         #[cfg(feature = "hydrate")]
         {
             let window = web_sys::window().expect("no window");
@@ -90,16 +90,25 @@ pub fn NearMe() -> impl IntoView {
 
             let success_cb = Closure::wrap(Box::new(move |pos: JsValue| {
                 let coords = js_sys::Reflect::get(&pos, &JsValue::from_str("coords")).unwrap();
-                let lat = js_sys::Reflect::get(&coords, &JsValue::from_str("latitude")).unwrap().as_f64().unwrap();
-                let lon = js_sys::Reflect::get(&coords, &JsValue::from_str("longitude")).unwrap().as_f64().unwrap();
-                
+                let lat = js_sys::Reflect::get(&coords, &JsValue::from_str("latitude"))
+                    .unwrap()
+                    .as_f64()
+                    .unwrap();
+                let lon = js_sys::Reflect::get(&coords, &JsValue::from_str("longitude"))
+                    .unwrap()
+                    .as_f64()
+                    .unwrap();
+
                 set_search_text.set(String::new());
                 set_lat_lon.set(Some((lat, lon)));
                 set_loading.set(false);
             }) as Box<dyn FnMut(JsValue)>);
 
             let error_cb = Closure::wrap(Box::new(move |err: JsValue| {
-                let msg = js_sys::Reflect::get(&err, &JsValue::from_str("message")).unwrap().as_string().unwrap_or_else(|| "Unknown error".into());
+                let msg = js_sys::Reflect::get(&err, &JsValue::from_str("message"))
+                    .unwrap()
+                    .as_string()
+                    .unwrap_or_else(|| "Unknown error".into());
                 set_error.set(Some(msg));
                 set_loading.set(false);
             }) as Box<dyn FnMut(JsValue)>);
@@ -113,8 +122,10 @@ pub fn NearMe() -> impl IntoView {
 
     let handle_search = move |_: ev::MouseEvent| {
         let query = search_text.get();
-        if query.trim().is_empty() { return; }
-        
+        if query.trim().is_empty() {
+            return;
+        }
+
         set_loading.set(true);
         set_error.set(None);
 
@@ -137,15 +148,15 @@ pub fn NearMe() -> impl IntoView {
     view! {
         <div class="near-me-container">
             <h1>"Pubs Near Me"</h1>
-            
+
             <div class="search-controls">
                 <div class="search-row">
-                    <input 
-                        type="text" 
-                        placeholder="Enter Town or Postcode..." 
+                    <input
+                        type="text"
+                        placeholder="Enter Town or Postcode..."
                         class="location-input"
                         on:input=move |ev| set_search_text.set(event_target_value(&ev))
-                        on:keydown=move |ev| { if ev.key() == "Enter" { 
+                        on:keydown=move |ev| { if ev.key() == "Enter" {
                             // Manual trigger for Enter
                         } }
                         prop:value=search_text
@@ -161,16 +172,16 @@ pub fn NearMe() -> impl IntoView {
                 <div class="radius-row">
                     <label>"Search Radius: "{move || (radius.get() / 1000.0).to_string()}" km"</label>
                     <div class="radius-inputs">
-                        <input 
-                            type="range" 
-                            min="500" 
-                            max="50000" 
+                        <input
+                            type="range"
+                            min="500"
+                            max="50000"
                             step="500"
                             prop:value=move || radius.get().to_string()
                             on:input=move |ev| set_radius.set(event_target_value(&ev).parse().unwrap_or(5000.0))
                         />
-                        <input 
-                            type="number" 
+                        <input
+                            type="number"
                             class="radius-num"
                             prop:value=move || (radius.get() / 1000.0).to_string()
                             on:input=move |ev| set_radius.set(event_target_value(&ev).parse::<f64>().unwrap_or(5.0) * 1000.0)
@@ -180,17 +191,17 @@ pub fn NearMe() -> impl IntoView {
 
                 <div class="sort-row">
                     <label class="open-only-toggle">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             on:change=move |ev| set_open_only.set(event_target_checked(&ev))
                             prop:checked=open_only
                         />
                         " Open only"
                     </label>
-                    <SortSelector 
-                        sort=Signal::from(sort) 
-                        on_change=Callback::new(move |mode| set_sort.set(mode)) 
-                        show_distance=lat_lon.get().is_some() 
+                    <SortSelector
+                        sort=Signal::from(sort)
+                        on_change=Callback::new(move |mode| set_sort.set(mode))
+                        show_distance=lat_lon.get().is_some()
                     />
                 </div>
             </div>
@@ -220,9 +231,9 @@ pub fn NearMe() -> impl IntoView {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card">
                                     <h3>{name}</h3>
                                     <p>{format!("{}, {}", town, region)}</p>
-                                    
+
                                     <div class="card-stats">
-                                        {dist.map(|d| view! { 
+                                        {dist.map(|d| view! {
                                             <div class=format!("stat-badge {}", if sort.get() == SortMode::Distance { "highlight" } else { "" })>
                                                 <span class="count">{d}</span>
                                                 <span class="label">" away"</span>

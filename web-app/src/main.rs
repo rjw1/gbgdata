@@ -138,9 +138,7 @@ async fn main() {
         app
     };
 
-    let app = app
-        .layer(session_layer)
-        .with_state(state);
+    let app = app.layer(session_layer).with_state(state);
 
     // run our app with hyper
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

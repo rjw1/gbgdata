@@ -54,10 +54,13 @@ pub fn verify_recovery_code(code: &str, hashed_codes: &[String]) -> bool {
 
 #[cfg(feature = "ssr")]
 pub mod session {
-    use tower_sessions::Session;
     use crate::auth::User;
+    use tower_sessions::Session;
 
-    pub async fn login(session: &Session, user: &User) -> Result<(), tower_sessions::session::Error> {
+    pub async fn login(
+        session: &Session,
+        user: &User,
+    ) -> Result<(), tower_sessions::session::Error> {
         session.insert("user", user).await?;
         Ok(())
     }

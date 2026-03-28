@@ -1,11 +1,7 @@
 use leptos::prelude::*;
 
 #[component]
-pub fn StatRing(
-    value: i64,
-    max: i64,
-    label: String,
-) -> impl IntoView {
+pub fn StatRing(value: i64, max: i64, label: String) -> impl IntoView {
     let radius = 40.0;
     let circumference = 2.0 * std::f64::consts::PI * radius;
     let offset = circumference - (value as f64 / max as f64) * circumference;

@@ -1,7 +1,7 @@
-use leptos::prelude::*;
-use crate::server::{get_user_visits, ExportUserVisits};
 use crate::components::map::MapView;
 use crate::models::PubSummary;
+use crate::server::{get_user_visits, ExportUserVisits};
+use leptos::prelude::*;
 use leptos::wasm_bindgen::{JsCast, JsValue};
 
 #[component]
@@ -9,12 +9,14 @@ pub fn MyVisits() -> impl IntoView {
     let visits = Resource::new(|| (), |_| get_user_visits());
     let (view_mode, set_view_mode) = signal(String::from("list"));
     let (export_format, set_export_format) = signal(String::new());
-    
+
     let export_action = ServerAction::<ExportUserVisits>::new();
 
     let on_export = move |fmt: &str| {
         set_export_format.set(fmt.to_string());
-        export_action.dispatch(ExportUserVisits { format: fmt.to_string() });
+        export_action.dispatch(ExportUserVisits {
+            format: fmt.to_string(),
+        });
     };
 
     Effect::new(move |_| {
@@ -28,8 +30,12 @@ pub fn MyVisits() -> impl IntoView {
 
             let window = web_sys::window().unwrap();
             let document = window.document().unwrap();
-            let link = document.create_element("a").unwrap().dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
-            
+            let link = document
+                .create_element("a")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlAnchorElement>()
+                .unwrap();
+
             let url = if is_base64 {
                 format!("data:{};base64,{}", mime_type, data)
             } else {
@@ -53,13 +59,13 @@ pub fn MyVisits() -> impl IntoView {
             <div class="explorer-header">
                 <h1>"My Visits"</h1>
                 <div class="view-toggle">
-                    <button 
+                    <button
                         class=move || format!("btn btn-sm {}", if view_mode.get() == "list" { "btn-primary active" } else { "btn-ghost" })
                         on:click=move |_| set_view_mode.set("list".to_string())
                     >
                         "List"
                     </button>
-                    <button 
+                    <button
                         class=move || format!("btn btn-sm {}", if view_mode.get() == "map" { "btn-primary active" } else { "btn-ghost" })
                         on:click=move |_| set_view_mode.set("map".to_string())
                     >
@@ -74,19 +80,19 @@ pub fn MyVisits() -> impl IntoView {
                         Ok(v) => {
                             let total_visits = v.len();
                             let unique_pubs = v.iter().map(|visit| visit.pub_id).collect::<std::collections::HashSet<_>>().len();
-                            
+
                             let v_cloned = v.clone();
                             let pubs_for_map = Memo::new(move |_| {
                                 v_cloned.iter().map(|visit| PubSummary {
                                     id: visit.pub_id,
                                     name: visit.pub_name.clone(),
-                                    town: String::new(), 
+                                    town: String::new(),
                                     region: String::new(),
                                     country_code: None,
                                     postcode: String::new(),
                                     closed: false,
                                     distance_meters: None,
-                                    lat: None, 
+                                    lat: None,
                                     lon: None,
                                     latest_year: None,
                                     total_years_rank: None,

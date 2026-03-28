@@ -1,5 +1,5 @@
-use calamine::{Reader, Xlsx, open_workbook};
 use anyhow::Result;
+use calamine::{open_workbook, Reader, Xlsx};
 
 fn main() -> Result<()> {
     let path = "GBG counties one sheet Duncan 2025.xlsx";

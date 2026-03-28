@@ -1,6 +1,8 @@
+use crate::server::{
+    CheckUserAuthType, FinishPasskeyAuthentication, Login, StartPasskeyAuthentication, Verify2FA,
+};
 use leptos::prelude::*;
 use uuid::Uuid;
-use crate::server::{Login, Verify2FA, CheckUserAuthType, StartPasskeyAuthentication, FinishPasskeyAuthentication};
 
 #[component]
 pub fn LoginForm() -> impl IntoView {
@@ -8,12 +10,17 @@ pub fn LoginForm() -> impl IntoView {
     let login_action = ServerAction::<Login>::new();
     let start_passkey_auth = ServerAction::<StartPasskeyAuthentication>::new();
     let finish_passkey_auth = ServerAction::<FinishPasskeyAuthentication>::new();
-    
+
     let (username, set_username) = signal(String::new());
     let (stage, set_stage) = signal(1); // 1: Username, 2: Auth Choice / Password
-    
+
     let auth_status = move || check_auth_action.value().get().and_then(|v| v.ok());
-    let user_id = move || login_action.value().get().and_then(|v: Result<Option<Uuid>, ServerFnError>| v.ok().flatten());
+    let user_id = move || {
+        login_action
+            .value()
+            .get()
+            .and_then(|v: Result<Option<Uuid>, ServerFnError>| v.ok().flatten())
+    };
 
     let navigate = leptos_router::hooks::use_navigate();
 
@@ -39,10 +46,10 @@ pub fn LoginForm() -> impl IntoView {
                 use wasm_bindgen_futures::spawn_local;
                 let challenge_cloned = _challenge.clone();
                 let finish_auth = finish_passkey_auth.clone();
-                
+
                 spawn_local(async move {
                     let result = crate::auth::client::authenticate(&challenge_cloned).await;
-                    
+
                     if let Ok(resp) = result {
                         finish_auth.dispatch(FinishPasskeyAuthentication {
                             auth_response: resp,
@@ -63,14 +70,14 @@ pub fn LoginForm() -> impl IntoView {
     view! {
         <div class="login-container">
             <h2>"Admin Login"</h2>
-            
+
             <Show when=move || user_id().is_none() fallback=move || view! { <TotpChallenge user_id=user_id().unwrap() /> }>
                 <div class="login-form">
                     <Show when=move || stage.get() == 1>
                         <ActionForm action=check_auth_action>
                             <div class="form-group">
                                 <label for="username">"Username"</label>
-                                <input type="text" name="username" id="username" required 
+                                <input type="text" name="username" id="username" required
                                     on:input=move |ev| set_username.set(event_target_value(&ev)) />
                             </div>
                             <button type="submit" class="btn btn-primary btn-block" disabled=check_auth_action.pending()>
@@ -81,7 +88,7 @@ pub fn LoginForm() -> impl IntoView {
 
                     <Show when=move || stage.get() == 2>
                         <p>"Logging in as: " <strong>{move || username.get()}</strong></p>
-                        
+
                         {move || match auth_status() {
                             Some(status) if status.has_passkeys => view! {
                                 <div class="passkey-login">
@@ -104,7 +111,7 @@ pub fn LoginForm() -> impl IntoView {
                                 {move || if login_action.pending().get() { "Logging in..." } else { "Login" }}
                             </button>
                             <button type="button" class="btn btn-ghost btn-block" style="margin-top: 1rem;" on:click=move |_| set_stage.set(1)>"Back"</button>
-                            
+
                             {move || login_action.value().get().map(|v: Result<Option<Uuid>, ServerFnError>| {
                                 if v.is_ok() && v.as_ref().unwrap().is_none() {
                                     view! { <p class="error">"Invalid username or password"</p> }.into_any()
