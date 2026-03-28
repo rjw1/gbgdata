@@ -32,6 +32,8 @@ async fn main() {
     use sqlx::postgres::PgPoolOptions;
     use tower_http::services::ServeDir;
     use tower_http::set_header::SetResponseHeaderLayer;
+    use tower_sessions::{SessionManagerLayer, Expiry};
+    use tower_sessions_sqlx_store::PostgresStore;
 
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -40,6 +42,14 @@ async fn main() {
         .connect(&database_url)
         .await
         .expect("Failed to connect to Postgres");
+
+    // Session setup
+    let session_store = PostgresStore::new(pool.clone());
+    session_store.migrate().await.expect("Failed to migrate session store");
+
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false) // Set to true in production with HTTPS
+        .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::days(7)));
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -91,6 +101,7 @@ async fn main() {
             header::HeaderName::from_static("x-frame-options"),
             HeaderValue::from_static("DENY"),
         ))
+        .layer(session_layer)
         .with_state(state);
 
     // run our app with hyper
