@@ -111,45 +111,49 @@ pub fn PubDetail() -> impl IntoView {
                                         <SuggestUpdateModal pub_data=p_cloned_2.clone() on_close=Callback::new(move |_| set_show_suggest.set(false)) />
                                     </Show>
 
-                                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
-                                        <Suspense fallback=|| ()>
-                                            {move || pending_suggestions_res.get().map(|res: Result<Vec<crate::models::SuggestedUpdate>, ServerFnError>| {
-                                                match res {
-                                                    Ok(list) if !list.is_empty() => {
-                                                        let s = list[0].clone();
-                                                        view! {
-                                                            <div class="admin-suggestion-banner">
-                                                                <p>"User " <strong>{s.username}</strong> " suggested an update."</p>
-                                                                <button class="btn btn-primary" on:click=move |_| {
-                                                                    process_action.dispatch(crate::server::ProcessSuggestedUpdate {
-                                                                        suggestion_id: s.id,
-                                                                        approve: true,
-                                                                    });
-                                                                }>"Approve"</button>
-                                                                <button class="btn btn-danger" on:click=move |_| {
-                                                                    process_action.dispatch(crate::server::ProcessSuggestedUpdate {
-                                                                        suggestion_id: s.id,
-                                                                        approve: false,
-                                                                    });
-                                                                }>"Reject"</button>
-                                                            </div>
-                                                        }.into_any()
-                                                    },
-                                                    _ => ().into_any()
-                                                }
-                                            })}
-                                        </Suspense>
-                                    </Show>
+                                    <Suspense fallback=|| ()>
+                                        <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
+                                            <Suspense fallback=|| ()>
+                                                {move || pending_suggestions_res.get().map(|res: Result<Vec<crate::models::SuggestedUpdate>, ServerFnError>| {
+                                                    match res {
+                                                        Ok(list) if !list.is_empty() => {
+                                                            let s = list[0].clone();
+                                                            view! {
+                                                                <div class="admin-suggestion-banner">
+                                                                    <p>"User " <strong>{s.username}</strong> " suggested an update."</p>
+                                                                    <button class="btn btn-primary" on:click=move |_| {
+                                                                        process_action.dispatch(crate::server::ProcessSuggestedUpdate {
+                                                                            suggestion_id: s.id,
+                                                                            approve: true,
+                                                                        });
+                                                                    }>"Approve"</button>
+                                                                    <button class="btn btn-danger" on:click=move |_| {
+                                                                        process_action.dispatch(crate::server::ProcessSuggestedUpdate {
+                                                                            suggestion_id: s.id,
+                                                                            approve: false,
+                                                                        });
+                                                                    }>"Reject"</button>
+                                                                </div>
+                                                            }.into_any()
+                                                        },
+                                                        _ => ().into_any()
+                                                    }
+                                                })}
+                                            </Suspense>
+                                        </Show>
+                                    </Suspense>
 
                                         <div class="pub-header">
                                             <h1>{name.clone()}</h1>
                                             <div class="header-actions">
-                                                <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
-                                                    <button class="btn btn-secondary" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
-                                                </Show>
-                                                <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
-                                                    <button class="btn btn-secondary" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
-                                                </Show>
+                                                <Suspense fallback=|| ()>
+                                                    <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
+                                                        <button class="btn btn-secondary" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
+                                                    </Show>
+                                                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
+                                                        <button class="btn btn-secondary" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
+                                                    </Show>
+                                                </Suspense>
                                             </div>
 
                                         </div>
@@ -220,26 +224,28 @@ pub fn PubDetail() -> impl IntoView {
                                             </div>
                                         </div>
 
-                                        <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
-                                            <div class="stats-card my-activity-card">
-                                                <h2>"My Activity"</h2>
-                                                <Suspense fallback=|| view! { <p>"Loading activity..."</p> }>
-                                                    {move || {
-                                                        visit_status.get().map(|res| {
-                                                            let has_visited = res.unwrap_or(false);
-                                                            view! {
-                                                                <p>
-                                                                    {if has_visited { "You have visited this pub." } else { "You haven't logged a visit here yet." }}
-                                                                </p>
-                                                                <button class="btn btn-secondary" on:click=move |_| set_show_log_visit.set(true)>
-                                                                    "Log Visit"
-                                                                </button>
-                                                            }
-                                                        })
-                                                    }}
-                                                </Suspense>
-                                            </div>
-                                        </Show>
+                                        <Suspense fallback=|| ()>
+                                            <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
+                                                <div class="stats-card my-activity-card">
+                                                    <h2>"My Activity"</h2>
+                                                    <Suspense fallback=|| view! { <p>"Loading activity..."</p> }>
+                                                        {move || {
+                                                            visit_status.get().map(|res| {
+                                                                let has_visited = res.unwrap_or(false);
+                                                                view! {
+                                                                    <p>
+                                                                        {if has_visited { "You have visited this pub." } else { "You haven't logged a visit here yet." }}
+                                                                    </p>
+                                                                    <button class="btn btn-secondary" on:click=move |_| set_show_log_visit.set(true)>
+                                                                        "Log Visit"
+                                                                    </button>
+                                                                }
+                                                            })
+                                                        }}
+                                                    </Suspense>
+                                                </div>
+                                            </Show>
+                                        </Suspense>
 
                                         <Suspense fallback=|| view! { <p>"Loading photos..."</p> }>
                                             {move || photos.get().map(|res| {
