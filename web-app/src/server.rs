@@ -1574,9 +1574,9 @@ pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSumm
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
     let query = match report_type.as_str() {
-        "coords" => "SELECT * FROM pubs WHERE lat IS NULL OR lon IS NULL LIMIT 100",
-        "ids" => "SELECT * FROM pubs WHERE whatpub_id IS NULL OR google_maps_id IS NULL OR untappd_id IS NULL LIMIT 100",
-        "closed" => "SELECT p.* FROM pubs p JOIN pub_stats s ON p.id = s.pub_id WHERE p.closed = true AND s.latest_year >= 2024 LIMIT 100",
+        "coords" => "SELECT p.*, ST_Y(p.location::geometry) as lat, ST_X(p.location::geometry) as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.location IS NULL LIMIT 100",
+        "ids" => "SELECT p.*, ST_Y(p.location::geometry) as lat, ST_X(p.location::geometry) as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL LIMIT 100",
+        "closed" => "SELECT p.*, ST_Y(p.location::geometry) as lat, ST_X(p.location::geometry) as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p JOIN pub_stats s ON p.id = s.pub_id WHERE p.closed = true AND s.latest_year >= 2024 LIMIT 100",
         _ => return Err(ServerFnError::new("Invalid report type")),
     };
 
