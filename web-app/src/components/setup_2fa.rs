@@ -32,7 +32,9 @@ pub fn Setup2FA() -> impl IntoView {
                             view! {
                                 <div class="setup-grid">
                                     <div class="qr-section">
-                                        <div class="qr-code" inner_html=qr_code></div>
+                                        <div class="qr-code">
+                                            <img src=qr_code alt="TOTP QR Code" />
+                                        </div>
                                         <p class="secret-text">"Secret: " <code>{secret}</code></p>
                                         <p class="url-text">"URL: " <small>{url}</small></p>
                                     </div>
