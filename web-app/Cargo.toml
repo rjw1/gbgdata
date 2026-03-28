@@ -31,7 +31,7 @@ arrow = { version = "53", optional = true }
 web-sys = { version = "0.3", features = ["Geolocation", "Navigator", "Window", "Position", "PositionError", "Coordinates", "Storage"] }
 js-sys = "0.3"
 argon2 = { version = "0.5", features = ["std"] }
-totp-rs = { version = "5.7", features = ["qr"] }
+totp-rs = { version = "5.7", features = ["qr", "otpauth", "serde_support"] }
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"], optional = true }
 url = "2.5"
 tower-sessions = { version = "0.15.0", optional = true }

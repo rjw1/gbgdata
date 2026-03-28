@@ -1416,22 +1416,62 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
         user.id
     ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
+    // Generate secret if missing (empty)
+    let secret_bytes = if !user_data.totp_secret_enc.is_empty() {
+        user_data.totp_secret_enc
+    } else {
+        use rand::RngCore;
+        let mut new_secret = vec![0u8; 20];
+        rand::thread_rng().fill_bytes(&mut new_secret);
+        
+        sqlx::query!(
+            "UPDATE users SET totp_secret_enc = $1 WHERE id = $2",
+            &new_secret, user.id
+        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+        new_secret
+    };
+
     let totp = TOTP::new(
         Algorithm::SHA1,
         6,
         1,
         30,
-        user_data.totp_secret_enc,
+        secret_bytes,
         Some("GBGData".to_string()),
         user_data.username.clone(),
     ).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let otp_url = totp.get_url();
-    let qr_code = totp.get_qr_base64().map_err(|e| ServerFnError::new(e.to_string()))?;
+    if otp_url.is_empty() {
+        return Err(ServerFnError::new("Failed to generate OTP URL"));
+    }
+
+    let qr_code_svg = {
+        use qrcodegen::{QrCode, QrCodeEcc};
+        let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium).map_err(|e| ServerFnError::new(e.to_string()))?;
+        let size = qr.size();
+        let border = 4;
+        let total_size = size + border * 2;
+        
+        let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {0} {0}\" shape-rendering=\"crispEdges\" style=\"background: white; padding: 10px; border-radius: 8px;\">\n", total_size);
+        svg.push_str(&format!("  <rect width=\"{}\" height=\"{}\" fill=\"white\" />\n", total_size, total_size));
+        svg.push_str(&format!("  <g transform=\"translate({}, {})\" fill=\"black\">\n", border, border));
+        for y in 0..size {
+            for x in 0..size {
+                if qr.get_module(x, y) {
+                    svg.push_str(&format!("    <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n", x, y));
+                }
+            }
+        }
+        svg.push_str("  </g>\n</svg>");
+        svg
+    };
+    
     let secret = totp.get_secret_base32();
 
     Ok(serde_json::json!({
-        "qr_code": qr_code,
+        "qr_code": qr_code_svg,
         "url": otp_url,
         "secret": secret
     }))
