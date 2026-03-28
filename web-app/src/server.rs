@@ -1413,10 +1413,20 @@ pub async fn register_with_invite(invite_id: Uuid, username: String, password: S
 pub async fn get_audit_logs() -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
     use crate::models::AuditLogEntry;
 
     let pool = use_context::<PgPool>()
         .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized: Admin role required"));
+    }
 
     let logs = sqlx::query_as::<_, AuditLogEntry>(
         r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
@@ -1641,7 +1651,17 @@ pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Resu
 pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSummary>, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized: Admin role required"));
+    }
 
     let query = match report_type.as_str() {
         "coords" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, NULL::float8 as lat, NULL::float8 as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.location IS NULL LIMIT 100",

@@ -54,7 +54,7 @@ pub fn AdminDashboard() -> impl IntoView {
         <div class="admin-dashboard">
             <Transition fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match user.get() {
-                    Some(Ok(Some(u))) => view! {
+                    Some(Ok(Some(u))) if u.role == "admin" => view! {
                         <div class="admin-header">
                             <h2>"Admin Dashboard"</h2>
                             <p>"Logged in as: " <strong>{u.username}</strong></p>
@@ -234,6 +234,12 @@ pub fn AdminDashboard() -> impl IntoView {
                                     })}
                                 </Suspense>
                             </Show>
+                        </div>
+                    }.into_any(),
+                    Some(Ok(Some(_))) => view! {
+                        <div class="error-container">
+                            <p>"Access Denied. Administrative privileges required."</p>
+                            <a href="/">"Return Home"</a>
                         </div>
                     }.into_any(),
                     Some(Ok(None)) => view! {
