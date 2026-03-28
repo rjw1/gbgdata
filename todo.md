@@ -15,3 +15,4 @@
 - when showing streak and years ingore if the pub has an entry in 1972.
 - add an about page
   - mention that 1972 was a trial run of the GBG so while the data is here its not used for appearances in the GBG.
+- add disclaimer that pubs may not be open

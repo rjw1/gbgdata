@@ -32,7 +32,10 @@ A full-stack Rust application for analyzing and visualizing historical Good Beer
 - **Components**: Follow the existing Leptos component structure in `web-app/src/components/`.
 - **SQL**: Use `sqlx::query!` or `sqlx::query_as!` for compile-time safety whenever possible. Use `sqlx::query` for complex dynamic queries (see `export.rs`).
 
-### 3.2 Testing
+### 3.2 Testing & Verification
+- **Build Verification**: After modifying `web-app`, ALWAYS verify the build for both features:
+  - `cargo check --features ssr` (Server-side rendering)
+  - `cargo check --features hydrate` (Client-side WASM)
 - **Import Tool**: Add unit tests to `import-tool/src/parsers.rs` for new data formats.
 - **Web App**: Expand the Playwright suite in `web-app/end2end/` for critical UI flows.
 
