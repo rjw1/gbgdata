@@ -676,12 +676,19 @@ nav a {
   border-radius: 8px;
   border: 1px solid var(--border);
 
-  .qr-code svg {
-    max-width: 250px;
-    height: auto;
+  .qr-code {
     background: white;
-    padding: 8px;
-    border-radius: 4px;
+    padding: 1rem;
+    display: inline-block;
+    border-radius: 8px;
+    line-height: 0;
+    margin-bottom: 1rem;
+
+    svg {
+      max-width: 250px;
+      height: auto;
+      display: block;
+    }
   }
 
   .secret-text, .url-text {
