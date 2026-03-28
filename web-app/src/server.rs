@@ -266,6 +266,11 @@ pub async fn get_pubs_by_location(
     use leptos::context::use_context;
     use sqlx::PgPool;
 
+    println!(
+        "SERVER: get_pubs_by_location(region={:?}, town={:?}, outcode={:?}, year={:?}, sort={:?}, open_only={:?})",
+        region, town, outcode, year, sort, open_only
+    );
+
     let pool =
         use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
@@ -1863,8 +1868,7 @@ pub async fn register_user(
     };
 
     // 2. Hash password
-    let password_hash = hash_password(&password)
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let password_hash = hash_password(&password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 3. Create user
     let mut totp_secret = vec![0u8; 20];

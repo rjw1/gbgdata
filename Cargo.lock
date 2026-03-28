@@ -4887,6 +4887,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "totp-rs",
+ "tower",
  "tower-http",
  "tower-sessions",
  "tower-sessions-sqlx-store",
