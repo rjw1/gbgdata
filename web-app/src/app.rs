@@ -5,6 +5,8 @@ use crate::components::near_me::NearMe;
 use crate::components::explorer::{ExplorerHome, RegionDashboard, LocationPubList, YearDashboard};
 use crate::components::rankings::Rankings;
 use crate::components::login::LoginForm;
+use crate::components::setup_2fa::Setup2FA;
+use crate::components::profile::Profile;
 use crate::components::admin::AdminDashboard;
 use crate::components::my_visits::MyVisits;
 use leptos::prelude::*;
@@ -100,6 +102,19 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 
 #[component]
 pub fn App() -> impl IntoView {
+    let user = Resource::new(|| (), |_| crate::server::get_current_user());
+    let navigate = leptos_router::hooks::use_navigate();
+    let location = leptos_router::hooks::use_location();
+
+    Effect::new(move |_| {
+        if let Some(Ok(Some(u))) = user.get() {
+            let path = location.pathname.get();
+            if !u.totp_setup_completed && path != "/setup-2fa" && path != "/login" && path != "/about" {
+                navigate("/setup-2fa", Default::default());
+            }
+        }
+    });
+
     view! {
         <Router>
             <main>
@@ -117,6 +132,8 @@ pub fn App() -> impl IntoView {
                         " | "
                         <A href="/about">"About"</A>
                         " | "
+                        <A href="/profile">"Profile"</A>
+                        " | "
                         <A href="/login">"Login"</A>
                     </div>
                     <ThemeToggle />
@@ -124,6 +141,8 @@ pub fn App() -> impl IntoView {
                 <Routes fallback=|| view! { "Page not found." }>
                     <Route path=path!("/") view=PubList/>
                     <Route path=path!("/login") view=LoginForm/>
+                    <Route path=path!("/setup-2fa") view=Setup2FA/>
+                    <Route path=path!("/profile") view=Profile/>
                     <Route path=path!("/admin") view=AdminDashboard/>
                     <Route path=path!("/near-me") view=NearMe/>
                     <Route path=path!("/my-visits") view=MyVisits/>

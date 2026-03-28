@@ -6,6 +6,8 @@ pub mod my_visits;
 pub mod near_me;
 pub mod stat_ring;
 pub mod login;
+pub mod setup_2fa;
+pub mod profile;
 pub mod admin;
 pub mod edit_pub;
 pub mod explorer;

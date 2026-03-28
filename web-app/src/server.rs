@@ -1,9 +1,95 @@
 use leptos::prelude::*;
-use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode};
+use crate::models::{PubSummary, PubDetail, RegionSummary, RegionDetails, YearSummary, SortMode, UserAuthStatus};
 #[cfg(feature = "ssr")]
 use crate::models::{TownSummary, OutcodeSummary, UserInvite};
 use crate::auth::User;
 use uuid::Uuid;
+
+#[server(Login, "/api")]
+pub async fn login(username: String, password: String) -> Result<Option<Uuid>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use crate::auth::verify_password;
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let user = sqlx::query!(
+        "SELECT id, password_hash FROM users WHERE username = $1",
+        username
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if let Some(user) = user {
+        if verify_password(&password, &user.password_hash) {
+            return Ok(Some(user.id));
+        }
+    }
+
+    Ok(None)
+}
+
+#[server(Verify2FA, "/api")]
+pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::{verify_totp, verify_recovery_code, User, session};
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let user_data = sqlx::query!(
+        "SELECT id, username, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash FROM users WHERE id = $1",
+        user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let success = if code.len() == 6 && code.chars().all(|c| c.is_digit(10)) {
+        verify_totp(&user_data.username, &user_data.totp_secret_enc, &code)
+    } else {
+        // Check recovery codes
+        if verify_recovery_code(&code, &user_data.recovery_codes_hash) {
+            // Remove used recovery code
+            let new_codes: Vec<String> = user_data.recovery_codes_hash
+                .into_iter()
+                .filter(|h| !crate::auth::verify_password(&code, h))
+                .collect();
+            
+            sqlx::query!(
+                "UPDATE users SET recovery_codes_hash = $1 WHERE id = $2",
+                &new_codes,
+                user_id
+            )
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            
+            true
+        } else {
+            false
+        }
+    };
+
+    if success {
+        session::login(&session, &User {
+            id: user_data.id,
+            username: user_data.username,
+            role: user_data.role,
+            totp_setup_completed: user_data.totp_setup_completed,
+        }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    }
+
+    Ok(success)
+}
 
 #[cfg(feature = "ssr")]
 fn get_order_by(sort: Option<SortMode>, default: &str) -> String {
@@ -1266,4 +1352,160 @@ pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
     } else {
         Ok(None)
     }
+}
+
+#[server(CheckUserAuthType, "/api")]
+pub async fn check_user_auth_type(username: String) -> Result<UserAuthStatus, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    let user = sqlx::query!(
+        "SELECT id, totp_setup_completed FROM users WHERE username = $1",
+        username
+    ).fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    match user {
+        Some(u) => {
+            let passkeys_count = sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM user_credentials WHERE user_id = $1",
+                u.id
+            ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
+
+            Ok(UserAuthStatus {
+                user_id: Some(u.id),
+                has_passkeys: passkeys_count > 0,
+                totp_required: !u.totp_setup_completed,
+            })
+        }
+        None => Ok(UserAuthStatus {
+            user_id: None,
+            has_passkeys: false,
+            totp_required: false,
+        })
+    }
+}
+
+#[server(GetTotpSetupInfo, "/api")]
+pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+    use totp_rs::{Algorithm, TOTP};
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let user_data = sqlx::query!(
+        "SELECT username, totp_secret_enc FROM users WHERE id = $1",
+        user.id
+    ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let totp = TOTP::new(
+        Algorithm::SHA1,
+        6,
+        1,
+        30,
+        user_data.totp_secret_enc,
+        Some("GBGData".to_string()),
+        user_data.username.clone(),
+    ).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let qr_code = totp.get_qr_base64().map_err(|e| ServerFnError::new(e.to_string()))?;
+    let url = totp.get_url();
+    let secret = totp.get_secret_base32();
+
+    Ok(serde_json::json!({
+        "qr_code": qr_code,
+        "url": url,
+        "secret": secret
+    }))
+}
+
+#[server(VerifyAndCompleteTotpSetup, "/api")]
+pub async fn verify_and_complete_totp_setup(user_id: Uuid, code: String) -> Result<bool, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::{verify_totp, User, session};
+    
+    let pool = use_context::<PgPool>()
+        .ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let user_data = sqlx::query!(
+        "SELECT id, username, role, totp_secret_enc FROM users WHERE id = $1",
+        user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    if verify_totp(&user_data.username, &user_data.totp_secret_enc, &code) {
+        sqlx::query!(
+            "UPDATE users SET totp_setup_completed = true WHERE id = $1",
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        session::login(&session, &User {
+            id: user_data.id,
+            username: user_data.username,
+            role: user_data.role,
+            totp_setup_completed: true,
+        }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[server(GetMyPasskeys, "/api")]
+pub async fn get_my_passkeys() -> Result<Vec<crate::models::UserCredential>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let passkeys = sqlx::query_as!(
+        crate::models::UserCredential,
+        "SELECT user_id, credential_id, public_key FROM user_credentials WHERE user_id = $1",
+        user.id
+    ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(passkeys)
+}
+
+#[server(DeletePasskey, "/api")]
+pub async fn delete_passkey(credential_id: Vec<u8>) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    sqlx::query!(
+        "DELETE FROM user_credentials WHERE user_id = $1 AND credential_id = $2",
+        user.id, credential_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
 }

@@ -71,3 +71,19 @@ pub mod session {
         session.get("user").await.ok().flatten()
     }
 }
+
+pub mod client {
+    use serde_json::Value;
+
+    pub async fn authenticate(_challenge: &Value) -> Result<Value, String> {
+        // In a real app, this would use web-sys to call navigator.credentials.get()
+        // and return the credential response as JSON.
+        // For now, we'll return an error to indicate it's not fully implemented.
+        Err("Passkey authentication not yet implemented in browser".to_string())
+    }
+
+    pub async fn register(_challenge: &Value) -> Result<Value, String> {
+        // Similar to authenticate, but for navigator.credentials.create()
+        Err("Passkey registration not yet implemented in browser".to_string())
+    }
+}

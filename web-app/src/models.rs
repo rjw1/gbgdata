@@ -175,3 +175,10 @@ pub struct UserCredential {
     pub credential_id: Vec<u8>,
     pub public_key: Vec<u8>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserAuthStatus {
+    pub user_id: Option<Uuid>,
+    pub has_passkeys: bool,
+    pub totp_required: bool,
+}
