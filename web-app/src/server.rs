@@ -839,6 +839,11 @@ pub async fn add_pub_photo(pub_id: Uuid, flickr_info: crate::models::FlickrPhoto
     .bind(flickr_info.is_cc_licensed)
     .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        user.id, "add_photo", "pub", pub_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
     Ok(())
 }
 
@@ -1233,6 +1238,11 @@ pub async fn bulk_update_pubs(
                              AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)")
         .bind(closed).bind(untappd_verified).bind(region).bind(town).bind(outcode)
         .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        user.id, "bulk_update_criteria", "multiple", user.id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(res.rows_affected())
 }
