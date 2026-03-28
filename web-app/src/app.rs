@@ -146,7 +146,7 @@ fn RouterContent() -> impl IntoView {
                     " | "
                     <A href="/profile">"Profile"</A>
                     <Suspense fallback=|| ()>
-                        <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                        <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
                             " | "
                             <A href="/admin">"Admin"</A>
                         </Show>

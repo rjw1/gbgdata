@@ -1051,7 +1051,7 @@ pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1083,7 +1083,7 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1182,7 +1182,7 @@ pub async fn bulk_update_pubs(
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1371,7 +1371,7 @@ pub async fn get_pending_invites() -> Result<Vec<UserInvite>, ServerFnError> {
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1506,7 +1506,7 @@ pub async fn get_audit_logs(search: String, limit: i64) -> Result<Vec<crate::mod
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
@@ -1747,7 +1747,7 @@ pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSumm
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
@@ -1797,7 +1797,7 @@ pub async fn get_users(search: String, role_filter: String) -> Result<Vec<UserMa
     let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
 
@@ -1964,7 +1964,7 @@ pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String
     let session = extract::<Session>().await?;
     let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
 
-    if user.role != "admin" {
+    if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Only admins can perform bulk updates"));
     }
 

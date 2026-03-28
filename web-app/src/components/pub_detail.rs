@@ -111,7 +111,7 @@ pub fn PubDetail() -> impl IntoView {
                                         <SuggestUpdateModal pub_data=p_cloned_2.clone() on_close=Callback::new(move |_| set_show_suggest.set(false)) />
                                     </Show>
 
-                                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
                                         <Suspense fallback=|| ()>
                                             {move || pending_suggestions_res.get().map(|res: Result<Vec<crate::models::SuggestedUpdate>, ServerFnError>| {
                                                 match res {
@@ -147,7 +147,7 @@ pub fn PubDetail() -> impl IntoView {
                                                 <Show when=move || matches!(user.get(), Some(Ok(Some(_))))>
                                                     <button class="suggest-btn" on:click=move |_| set_show_suggest.set(true)>"Suggest Update"</button>
                                                 </Show>
-                                                <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                                                <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
                                                     <button class="edit-btn" on:click=move |_| set_show_edit.set(true)>"Edit"</button>
                                                 </Show>
                                             </div>
