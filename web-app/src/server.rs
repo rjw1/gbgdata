@@ -1427,31 +1427,11 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
     ).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let otp_url = totp.get_url();
-    let qr_code_data_url = {
-        use qrcodegen::{QrCode, QrCodeEcc};
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        
-        let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium).map_err(|e| ServerFnError::new(e.to_string()))?;
-        let size = qr.size();
-        
-        let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {0} {0}\" shape-rendering=\"crispEdges\">\n", size);
-        svg.push_str(&format!("  <rect width=\"{}\" height=\"{}\" fill=\"white\" />\n", size, size));
-        svg.push_str("  <g fill=\"black\">\n");
-        for y in 0..size {
-            for x in 0..size {
-                if qr.get_module(x, y) {
-                    svg.push_str(&format!("    <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n", x, y));
-                }
-            }
-        }
-        svg.push_str("  </g>\n</svg>");
-        
-        format!("data:image/svg+xml;base64,{}", STANDARD.encode(svg))
-    };
+    let qr_code = totp.get_qr_base64().map_err(|e| ServerFnError::new(e.to_string()))?;
     let secret = totp.get_secret_base32();
 
     Ok(serde_json::json!({
-        "qr_code": qr_code_data_url,
+        "qr_code": qr_code,
         "url": otp_url,
         "secret": secret
     }))

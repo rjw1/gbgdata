@@ -678,16 +678,18 @@ nav a {
 
   .qr-code {
     background: white;
-    padding: 1rem;
+    padding: 1.5rem;
     display: inline-block;
     border-radius: 8px;
     line-height: 0;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 
     img {
       max-width: 250px;
       height: auto;
       display: block;
+      image-rendering: pixelated;
     }
   }
 
