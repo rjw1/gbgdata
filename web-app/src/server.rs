@@ -542,6 +542,668 @@ pub async fn update_pub(
     Ok(())
 }
 
+#[server(LogVisit, "/api")]
+pub async fn log_visit(pub_id: Uuid, visit_date: String, notes: Option<String>) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let date = chrono::NaiveDate::parse_from_str(&visit_date, "%Y-%m-%d")
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO user_visits (user_id, pub_id, visit_date, notes) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, pub_id, visit_date) DO NOTHING",
+        user.id, pub_id, date, notes
+    )
+    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(GetUserVisits, "/api")]
+pub async fn get_user_visits() -> Result<Vec<crate::models::VisitRecord>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let visits = sqlx::query_as!(
+        crate::models::VisitRecord,
+        r#"SELECT v.id, v.pub_id, p.name as "pub_name", v.visit_date, v.notes
+           FROM user_visits v
+           JOIN pubs p ON v.pub_id = p.id
+           WHERE v.user_id = $1
+           ORDER BY v.visit_date DESC"#,
+        user.id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(visits)
+}
+
+#[server(GetPubVisitStatus, "/api")]
+pub async fn get_pub_visit_status(pub_id: Uuid) -> Result<bool, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await;
+
+    if let Some(user) = user {
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM user_visits WHERE user_id = $1 AND pub_id = $2",
+            user.id, pub_id
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(count.unwrap_or(0) > 0)
+    } else {
+        Ok(false)
+    }
+}
+
+#[server(FetchFlickrPhoto, "/api")]
+pub async fn fetch_flickr_photo(url_or_id: String) -> Result<crate::models::FlickrPhotoInfo, ServerFnError> {
+    use crate::models::FlickrPhotoInfo;
+    let api_key = std::env::var("FLICKR_API_KEY").map_err(|_| ServerFnError::new("FLICKR_API_KEY not set"))?;
+    
+    // Extract photo ID (simple version: last part of URL or just the ID)
+    let photo_id = url_or_id.split('/').filter(|s| !s.is_empty()).last().ok_or_else(|| ServerFnError::new("Invalid Flickr URL or ID"))?;
+    
+    let client = reqwest::Client::new();
+    
+    // 1. Get Info
+    let info_resp = client.get("https://www.flickr.com/services/rest/")
+        .query(&[
+            ("method", "flickr.photos.getInfo"),
+            ("api_key", &api_key),
+            ("photo_id", photo_id),
+            ("format", "json"),
+            ("nojsoncallback", "1"),
+        ])
+        .send().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    let info_json: serde_json::Value = info_resp.json().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    if info_json["stat"] != "ok" {
+        return Err(ServerFnError::new(format!("Flickr API error: {}", info_json["message"])));
+    }
+    
+    let photo = &info_json["photo"];
+    let owner_name = photo["owner"]["realname"].as_str().filter(|s| !s.is_empty())
+        .unwrap_or_else(|| photo["owner"]["username"].as_str().unwrap_or("Unknown"));
+    let title = photo["title"]["_content"].as_str().unwrap_or("Untitled");
+    let license_id = photo["license"].as_str().unwrap_or("0");
+    
+    // License mapping (Flickr IDs for CC)
+    // 1: Attrib-NC-SA, 2: Attrib-NC, 3: Attrib-NC-ND, 4: Attrib, 5: Attrib-SA, 6: Attrib-ND, 9: CC0, 10: Public Domain
+    let (license_type, license_url, is_cc) = match license_id {
+        "1" => ("Attribution-NonCommercial-ShareAlike", "https://creativecommons.org/licenses/by-nc-sa/2.0/", true),
+        "2" => ("Attribution-NonCommercial", "https://creativecommons.org/licenses/by-nc/2.0/", true),
+        "3" => ("Attribution-NonCommercial-NoDerivs", "https://creativecommons.org/licenses/by-nc-nd/2.0/", true),
+        "4" => ("Attribution", "https://creativecommons.org/licenses/by/2.0/", true),
+        "5" => ("Attribution-ShareAlike", "https://creativecommons.org/licenses/by-sa/2.0/", true),
+        "6" => ("Attribution-NoDerivs", "https://creativecommons.org/licenses/by-nd/2.0/", true),
+        "9" => ("CC0 1.0 Universal", "https://creativecommons.org/publicdomain/zero/1.0/", true),
+        "10" => ("Public Domain Mark 1.0", "https://creativecommons.org/publicdomain/mark/1.0/", true),
+        _ => ("All Rights Reserved", "https://www.flickr.com/help/usage/", false),
+    };
+    
+    // 2. Get Sizes
+    let sizes_resp = client.get("https://www.flickr.com/services/rest/")
+        .query(&[
+            ("method", "flickr.photos.getSizes"),
+            ("api_key", &api_key),
+            ("photo_id", photo_id),
+            ("format", "json"),
+            ("nojsoncallback", "1"),
+        ])
+        .send().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    let sizes_json: serde_json::Value = sizes_resp.json().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let sizes = sizes_json["sizes"]["size"].as_array().ok_or_else(|| ServerFnError::new("No sizes found"))?;
+    
+    // Prefer "Large" or "Medium 800" or just the largest available
+    let large_size = sizes.iter().find(|s| s["label"] == "Large")
+        .or_else(|| sizes.iter().find(|s| s["label"] == "Medium 800"))
+        .unwrap_or_else(|| sizes.last().unwrap());
+        
+    let image_url = large_size["source"].as_str().unwrap().to_string();
+    let original_url = format!("https://www.flickr.com/photos/{}/{}", photo["owner"]["nsid"].as_str().unwrap(), photo_id);
+
+    Ok(FlickrPhotoInfo {
+        flickr_id: photo_id.to_string(),
+        title: title.to_string(),
+        owner_name: owner_name.to_string(),
+        image_url,
+        original_url,
+        license_type: license_type.to_string(),
+        license_url: license_url.to_string(),
+        is_cc_licensed: is_cc,
+    })
+}
+
+#[server(AddPubPhoto, "/api")]
+pub async fn add_pub_photo(pub_id: Uuid, flickr_info: crate::models::FlickrPhotoInfo) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    sqlx::query!(
+        r#"INSERT INTO pub_photos (pub_id, user_id, flickr_id, image_url, owner_name, license_type, license_url, original_url, is_cc_licensed)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+        pub_id, user.id, flickr_info.flickr_id, flickr_info.image_url, flickr_info.owner_name,
+        flickr_info.license_type, flickr_info.license_url, flickr_info.original_url, flickr_info.is_cc_licensed
+    )
+    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(GetPubPhotos, "/api")]
+pub async fn get_pub_photos(pub_id: Uuid) -> Result<Vec<crate::models::PubPhoto>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    let photos = sqlx::query_as!(
+        crate::models::PubPhoto,
+        r#"SELECT id, pub_id, flickr_id, image_url, owner_name, license_type, license_url, is_cc_licensed
+           FROM pub_photos WHERE pub_id = $1 ORDER BY created_at DESC"#,
+        pub_id
+    )
+    .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(photos)
+}
+
+#[cfg(feature = "ssr")]
+fn get_webauthn() -> Result<webauthn_rs::Webauthn, ServerFnError> {
+    let rp_id = std::env::var("RP_ID").unwrap_or_else(|_| "localhost".to_string());
+    let rp_origin_str = std::env::var("RP_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let rp_origin = url::Url::parse(&rp_origin_str).map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let builder = webauthn_rs::WebauthnBuilder::new(&rp_id, &rp_origin)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    builder.build().map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(StartPasskeyRegistration, "/api")]
+pub async fn start_passkey_registration() -> Result<serde_json::Value, ServerFnError> {
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+    use webauthn_rs::prelude::*;
+
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let webauthn = get_webauthn()?;
+    
+    let (challenge, registration_state) = webauthn.start_passkey_registration(user.id, &user.username, &user.username, None)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    session.insert("registration_state", registration_state).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    Ok(serde_json::to_value(challenge).unwrap())
+}
+
+#[server(FinishPasskeyRegistration, "/api")]
+pub async fn finish_passkey_registration(reg_response: serde_json::Value) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+    use webauthn_rs::prelude::*;
+
+    let reg_response: RegisterPublicKeyCredential = serde_json::from_value(reg_response).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let registration_state: PasskeyRegistration = session.get("registration_state").await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Registration state not found in session"))?;
+        
+    let webauthn = get_webauthn()?;
+    let passkey = webauthn.finish_passkey_registration(&reg_response, &registration_state)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    let credential_id = passkey.cred_id().to_vec();
+    let public_key = serde_json::to_vec(&passkey).map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    sqlx::query!(
+        "INSERT INTO user_credentials (user_id, credential_id, public_key) VALUES ($1, $2, $3)",
+        user.id, credential_id, public_key
+    )
+    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+    
+    session.remove::<PasskeyRegistration>("registration_state").await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    Ok(())
+}
+
+#[server(StartPasskeyAuthentication, "/api")]
+pub async fn start_passkey_authentication(username: String) -> Result<serde_json::Value, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use webauthn_rs::prelude::*;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let user_creds = sqlx::query!(
+        "SELECT c.public_key FROM user_credentials c JOIN users u ON c.user_id = u.id WHERE u.username = $1",
+        username
+    )
+    .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let passkeys: Vec<Passkey> = user_creds.iter()
+        .map(|c| serde_json::from_slice(&c.public_key).unwrap())
+        .collect();
+        
+    let webauthn = get_webauthn()?;
+    let (challenge, authentication_state) = webauthn.start_passkey_authentication(&passkeys)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    session.insert("authentication_state", authentication_state).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    session.insert("auth_username", username).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    Ok(serde_json::to_value(challenge).unwrap())
+}
+
+#[server(FinishPasskeyAuthentication, "/api")]
+pub async fn finish_passkey_authentication(auth_response: serde_json::Value) -> Result<bool, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::{session, User};
+    use webauthn_rs::prelude::*;
+
+    let auth_response: PublicKeyCredential = serde_json::from_value(auth_response).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let authentication_state: PasskeyAuthentication = session.get("authentication_state").await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Authentication state not found in session"))?;
+        
+    let username: String = session.get("auth_username").await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("Username not found in session"))?;
+        
+    let webauthn = get_webauthn()?;
+    let auth_result = webauthn.finish_passkey_authentication(&auth_response, &authentication_state)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        
+    // Update sign count
+    let credential_id = auth_result.cred_id().to_vec();
+    sqlx::query!(
+        "UPDATE user_credentials SET sign_count = $1 WHERE credential_id = $2",
+        auth_result.counter() as i64, credential_id
+    )
+    .execute(&pool).await.map_err(|e: sqlx::Error| ServerFnError::new(e.to_string()))?;
+    
+    // Login user
+    let user_data = sqlx::query!(
+        "SELECT id, username, role, totp_setup_completed FROM users WHERE username = $1",
+        username
+    )
+    .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    session::login(&session, &User {
+        id: user_data.id,
+        username: user_data.username,
+        role: user_data.role,
+        totp_setup_completed: user_data.totp_setup_completed,
+    }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    session.remove::<PasskeyAuthentication>("authentication_state").await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    session.remove::<String>("auth_username").await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    Ok(true)
+}
+
+#[server(SuggestUpdate, "/api")]
+pub async fn suggest_update(pub_id: Uuid, suggested_data: serde_json::Value) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    sqlx::query!(
+        "INSERT INTO suggested_updates (pub_id, user_id, suggested_data) VALUES ($1, $2, $3)",
+        pub_id, user.id, suggested_data
+    )
+    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(GetSuggestedUpdates, "/api")]
+pub async fn get_suggested_updates(status: Option<String>) -> Result<Vec<crate::models::SuggestedUpdate>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let status_filter = status.unwrap_or_else(|| "pending".to_string());
+
+    let suggestions = sqlx::query_as!(
+        crate::models::SuggestedUpdate,
+        r#"SELECT s.id, s.pub_id, p.name as "pub_name", s.user_id, u.username, s.status, s.suggested_data, s.created_at
+           FROM suggested_updates s
+           JOIN pubs p ON s.pub_id = p.id
+           JOIN users u ON s.user_id = u.id
+           WHERE s.status = $1
+           ORDER BY s.created_at DESC"#,
+        status_filter
+    )
+    .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(suggestions)
+}
+
+#[server(ProcessSuggestedUpdate, "/api")]
+pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let status = if approve { "approved" } else { "rejected" };
+
+    sqlx::query!(
+        "UPDATE suggested_updates SET status = $1, processed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3",
+        status, user.id, suggestion_id
+    )
+    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // If approved, you might want to automatically apply changes, but usually, an admin will review and edit.
+    // For now, we just mark it as processed.
+
+    Ok(())
+}
+
+#[server(BulkUpdatePubs, "/api")]
+pub async fn bulk_update_pubs(
+    region: Option<String>,
+    town: Option<String>,
+    outcode: Option<String>,
+    closed: Option<bool>,
+    untappd_verified: Option<bool>,
+) -> Result<u64, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let mut query = String::from("UPDATE pubs SET id = id"); // No-op to start
+    let mut param_idx = 1;
+    let mut binds = Vec::new();
+
+    if let Some(c) = closed {
+        query.push_str(&format!(", closed = ${}", param_idx));
+        param_idx += 1;
+        binds.push(c.to_string());
+    }
+    if let Some(v) = untappd_verified {
+        query.push_str(&format!(", untappd_verified = ${}", param_idx));
+        param_idx += 1;
+        binds.push(v.to_string());
+    }
+
+    query.push_str(" WHERE 1=1");
+
+    if let Some(ref r) = region {
+        query.push_str(&format!(" AND region = ${}", param_idx));
+        param_idx += 1;
+        binds.push(r.clone());
+    }
+    if let Some(ref t) = town {
+        query.push_str(&format!(" AND town = ${}", param_idx));
+        param_idx += 1;
+        binds.push(t.clone());
+    }
+    if let Some(ref o) = outcode {
+        query.push_str(&format!(" AND SPLIT_PART(postcode, ' ', 1) = ${}", param_idx));
+        param_idx += 1;
+        binds.push(o.clone());
+    }
+
+    // This is a bit tricky with sqlx because of dynamic number of binds and types.
+    // For now, we just implement a simplified version or use a macro if possible.
+    // Given the constraints, I'll use a direct query for simple cases.
+    
+    let result = sqlx::query(&query);
+    // ... bind manually based on what we added ...
+    // Since this is complex to do generically in sqlx without a lot of boilerplate,
+    // I'll stick to a more restricted but safe implementation if needed.
+    
+    let res = sqlx::query!("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
+                           WHERE (region = $3 OR $3 IS NULL) 
+                             AND (town = $4 OR $4 IS NULL) 
+                             AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)",
+        closed, untappd_verified, region, town, outcode
+    )
+    .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(res.rows_affected())
+}
+
+#[server(ExportUserVisits, "/api")]
+pub async fn export_user_visits() -> Result<String, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    let visits = sqlx::query!(
+        r#"SELECT v.visit_date, p.name, p.town, p.region, v.notes
+           FROM user_visits v
+           JOIN pubs p ON v.pub_id = p.id
+           WHERE v.user_id = $1
+           ORDER BY v.visit_date DESC"#,
+        user.id
+    )
+    .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let mut csv = String::from("date,pub_name,town,region,notes\n");
+    for v in visits {
+        csv.push_str(&format!(
+            "{},\"{}\",\"{}\",\"{}\",\"{}\"\n",
+            v.visit_date,
+            v.name.replace("\"", "\"\""),
+            v.town.unwrap_or_default().replace("\"", "\"\""),
+            v.region.unwrap_or_default().replace("\"", "\"\""),
+            v.notes.unwrap_or_default().replace("\"", "\"\"")
+        ));
+    }
+
+    Ok(csv)
+}
+
+#[server(CreateInvite, "/api")]
+pub async fn create_invite(role: String, expires_in_days: i64) -> Result<Uuid, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(expires_in_days);
+
+    let invite_id = sqlx::query_scalar!(
+        "INSERT INTO user_invites (role, expires_at, created_by) VALUES ($1, $2, $3) RETURNING id",
+        role, expires_at, user.id
+    )
+    .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(invite_id.unwrap())
+}
+
+#[server(GetInvites, "/api")]
+pub async fn get_invites() -> Result<serde_json::Value, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use tower_sessions::Session;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    let invites = sqlx::query!(
+        "SELECT id, role, expires_at, used_at FROM user_invites ORDER BY expires_at DESC"
+    )
+    .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(serde_json::to_value(invites).unwrap())
+}
+
+#[server(RegisterWithInvite, "/api")]
+pub async fn register_with_invite(invite_id: Uuid, username: String, password: String) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+    use rand::rngs::OsRng;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    // 1. Verify invite
+    let invite = sqlx::query!(
+        "SELECT role, expires_at, used_at FROM user_invites WHERE id = $1",
+        invite_id
+    )
+    .fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?
+    .ok_or_else(|| ServerFnError::new("Invalid invite"))?;
+
+    if invite.used_at.is_some() {
+        return Err(ServerFnError::new("Invite already used"));
+    }
+    if invite.expires_at < chrono::Utc::now() {
+        return Err(ServerFnError::new("Invite expired"));
+    }
+
+    // 2. Hash password
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .to_string();
+
+    // 3. Create user
+    // Generate a temporary TOTP secret that must be changed
+    let mut totp_secret = vec![0u8; 20];
+    getrandom::getrandom(&mut totp_secret).map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let mut tx = pool.begin().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    sqlx::query!(
+        "INSERT INTO users (username, password_hash, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash) 
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        username, password_hash, invite.role, false, totp_secret, &Vec::<String>::new()
+    )
+    .execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "UPDATE user_invites SET used_at = CURRENT_TIMESTAMP WHERE id = $1",
+        invite_id
+    )
+    .execute(&mut *tx).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    tx.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
 #[server(GetAuditLogs, "/api")]
 pub async fn get_audit_logs() -> Result<Vec<crate::models::AuditLogEntry>, ServerFnError> {
     use sqlx::PgPool;
