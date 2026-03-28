@@ -10,6 +10,28 @@ pub fn AdminDashboard() -> impl IntoView {
     
     let (active_tab, set_active_tab) = signal(String::from("activity"));
     let (editing_pub_id, set_editing_pub_id) = signal(None::<uuid::Uuid>);
+    let (user_search, set_user_search) = signal(String::new());
+    let (role_filter, set_role_filter) = signal(String::from("all"));
+
+    let users_list = Resource::new(
+        move || (active_tab.get(), user_search.get(), role_filter.get()),
+        |(tab, search, role)| async move {
+            if tab == "users" {
+                crate::server::get_users(search, role).await
+            } else {
+                Ok(vec![])
+            }
+        }
+    );
+
+    let update_role_action = ServerAction::<crate::server::UpdateUserRole>::new();
+    let reset_2fa_action = ServerAction::<crate::server::ResetUser2FA>::new();
+
+    Effect::new(move |_| {
+        if update_role_action.value().get().is_some() || reset_2fa_action.value().get().is_some() {
+            users_list.refetch();
+        }
+    });
 
     let suggestions = Resource::new(
         move || active_tab.get(),
@@ -83,6 +105,10 @@ pub fn AdminDashboard() -> impl IntoView {
                                 <button class=move || if active_tab.get() == "suggestions" { "active" } else { "" }
                                     on:click=move |_| set_active_tab.set("suggestions".to_string())>
                                     "Suggestions"
+                                </button>
+                                <button class=move || if active_tab.get() == "users" { "active" } else { "" }
+                                    on:click=move |_| set_active_tab.set("users".to_string())>
+                                    "Users"
                                 </button>
                             </div>
 
@@ -165,7 +191,67 @@ pub fn AdminDashboard() -> impl IntoView {
                                 </Transition>
                             </Show>
 
-                            <Show when=move || active_tab.get() != "activity" && active_tab.get() != "suggestions">
+                            <Show when=move || active_tab.get() == "users">
+                                <h3>"User Management"</h3>
+                                <div class="list-controls">
+                                    <input type="text" placeholder="Search users..." 
+                                        on:input=move |ev| set_user_search.set(event_target_value(&ev)) />
+                                    <select on:change=move |ev| set_role_filter.set(event_target_value(&ev))>
+                                        <option value="all">"All Roles"</option>
+                                        <option value="admin">"Admin"</option>
+                                        <option value="user">"User"</option>
+                                    </select>
+                                </div>
+                                <Transition fallback=move || view! { <p>"Loading users..."</p> }>
+                                    {move || match users_list.get() {
+                                        Some(Ok(list)) => view! {
+                                            <table class="audit-log-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>"Username"</th>
+                                                        <th>"Role"</th>
+                                                        <th>"2FA"</th>
+                                                        <th>"Last Login"</th>
+                                                        <th>"Actions"</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {list.into_iter().map(|u| {
+                                                        let id = u.id;
+                                                        let current_role = u.role.clone();
+                                                        view! {
+                                                            <tr>
+                                                                <td>{u.username}</td>
+                                                                <td>
+                                                                    <select on:change=move |ev| {
+                                                                        update_role_action.dispatch(crate::server::UpdateUserRole {
+                                                                            user_id: id,
+                                                                            new_role: event_target_value(&ev),
+                                                                        });
+                                                                    }>
+                                                                        <option value="admin" selected=current_role == "admin">"Admin"</option>
+                                                                        <option value="user" selected=current_role == "user">"User"</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>{if u.totp_setup_completed { "✅" } else { "❌" }}</td>
+                                                                <td>{u.last_login.map(|t| t.format("%Y-%m-%d").to_string()).unwrap_or_else(|| "Never".to_string())}</td>
+                                                                <td>
+                                                                    <button on:click=move |_| {
+                                                                        reset_2fa_action.dispatch(crate::server::ResetUser2FA { user_id: id });
+                                                                    } disabled=reset_2fa_action.pending()>"Reset 2FA"</button>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    }).collect_view()}
+                                                </tbody>
+                                            </table>
+                                        }.into_any(),
+                                        _ => view! { <p>"Error loading users."</p> }.into_any(),
+                                    }}
+                                </Transition>
+                            </Show>
+
+                            <Show when=move || active_tab.get() != "activity" && active_tab.get() != "suggestions" && active_tab.get() != "users">
                                 <h3>{move || match active_tab.get().as_str() {
                                     "coords" => "Pubs with Missing Coordinates",
                                     "ids" => "Pubs with Missing External IDs",
