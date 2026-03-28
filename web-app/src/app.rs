@@ -102,6 +102,15 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 
 #[component]
 pub fn App() -> impl IntoView {
+    view! {
+        <Router>
+            <RouterContent />
+        </Router>
+    }
+}
+
+#[component]
+fn RouterContent() -> impl IntoView {
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
     let navigate = leptos_router::hooks::use_navigate();
     let location = leptos_router::hooks::use_location();
@@ -116,57 +125,55 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <Router>
-            <main>
-                <nav>
-                    <div class="nav-links">
-                        <A href="/">"Home"</A>
-                        " | "
-                        <A href="/explore">"Explore"</A>
-                        " | "
-                        <A href="/near-me">"Near Me"</A>
-                        " | "
-                        <A href="/my-visits">"My Visits"</A>
-                        " | "
-                        <A href="/rankings">"Rankings"</A>
-                        " | "
-                        <A href="/about">"About"</A>
-                        " | "
-                        <A href="/profile">"Profile"</A>
-                        " | "
-                        <A href="/login">"Login"</A>
-                    </div>
-                    <ThemeToggle />
-                </nav>
-                <Routes fallback=|| view! { "Page not found." }>
-                    <Route path=path!("/") view=PubList/>
-                    <Route path=path!("/login") view=LoginForm/>
-                    <Route path=path!("/setup-2fa") view=Setup2FA/>
-                    <Route path=path!("/profile") view=Profile/>
-                    <Route path=path!("/admin") view=AdminDashboard/>
-                    <Route path=path!("/near-me") view=NearMe/>
-                    <Route path=path!("/my-visits") view=MyVisits/>
-                    <Route path=path!("/rankings") view=Rankings/>
-                    <Route path=path!("/about") view=About/>
-                    <Route path=path!("/pub/:id") view=PubDetail/>
-                    
-                    <Route path=path!("/explore") view=ExplorerHome/>
-                    <Route path=path!("/explore/:region") view=RegionDashboard/>
-                    <Route path=path!("/explore/:region/all") view=LocationPubList/>
-                    <Route path=path!("/explore/:region/town/:town") view=LocationPubList/>
-                    <Route path=path!("/explore/:region/outcode/:outcode") view=LocationPubList/>
+        <main>
+            <nav>
+                <div class="nav-links">
+                    <A href="/">"Home"</A>
+                    " | "
+                    <A href="/explore">"Explore"</A>
+                    " | "
+                    <A href="/near-me">"Near Me"</A>
+                    " | "
+                    <A href="/my-visits">"My Visits"</A>
+                    " | "
+                    <A href="/rankings">"Rankings"</A>
+                    " | "
+                    <A href="/about">"About"</A>
+                    " | "
+                    <A href="/profile">"Profile"</A>
+                    " | "
+                    <A href="/login">"Login"</A>
+                </div>
+                <ThemeToggle />
+            </nav>
+            <Routes fallback=|| view! { "Page not found." }>
+                <Route path=path!("/") view=PubList/>
+                <Route path=path!("/login") view=LoginForm/>
+                <Route path=path!("/setup-2fa") view=Setup2FA/>
+                <Route path=path!("/profile") view=Profile/>
+                <Route path=path!("/admin") view=AdminDashboard/>
+                <Route path=path!("/near-me") view=NearMe/>
+                <Route path=path!("/my-visits") view=MyVisits/>
+                <Route path=path!("/rankings") view=Rankings/>
+                <Route path=path!("/about") view=About/>
+                <Route path=path!("/pub/:id") view=PubDetail/>
+                
+                <Route path=path!("/explore") view=ExplorerHome/>
+                <Route path=path!("/explore/:region") view=RegionDashboard/>
+                <Route path=path!("/explore/:region/all") view=LocationPubList/>
+                <Route path=path!("/explore/:region/town/:town") view=LocationPubList/>
+                <Route path=path!("/explore/:region/outcode/:outcode") view=LocationPubList/>
 
-                    <Route path=path!("/explore/year/:year") view=YearDashboard/>
-                    <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
-                    <Route path=path!("/explore/year/:year/:region/all") view=LocationPubList/>
-                    <Route path=path!("/explore/year/:year/:region/town/:town") view=LocationPubList/>
-                    <Route path=path!("/explore/year/:year/:region/outcode/:outcode") view=LocationPubList/>
-                </Routes>
-                <footer>
-                    <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>
-                    <p>"Disclaimer: While we track if a pub has been reported as closed, this information may be out of date. Always check with the pub before visiting."</p>
-                </footer>
-            </main>
-        </Router>
+                <Route path=path!("/explore/year/:year") view=YearDashboard/>
+                <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
+                <Route path=path!("/explore/year/:year/:region/all") view=LocationPubList/>
+                <Route path=path!("/explore/year/:year/:region/town/:town") view=LocationPubList/>
+                <Route path=path!("/explore/year/:year/:region/outcode/:outcode") view=LocationPubList/>
+            </Routes>
+            <footer>
+                <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>
+                <p>"Disclaimer: While we track if a pub has been reported as closed, this information may be out of date. Always check with the pub before visiting."</p>
+            </footer>
+        </main>
     }
 }
