@@ -20,6 +20,7 @@ WORKDIR /app
 # Copy the workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY web-app ./web-app
+COPY migrations ./migrations
 
 # Build the application in release mode
 WORKDIR /app/web-app

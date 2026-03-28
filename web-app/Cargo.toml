@@ -20,7 +20,7 @@ serde_json = "1.0"
 uuid = { version = "1", features = ["v4", "serde", "js"] }
 getrandom = { version = "0.2", features = ["js"] }
 chrono = { version = "0.4", features = ["serde"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"], optional = true }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "migrate"], optional = true }
 dotenvy = { version = "0.15", optional = true }
 anyhow = { version = "1.0", optional = true }
 tower-http = { version = "0.6", features = ["fs", "set-header"], optional = true }
@@ -32,6 +32,8 @@ web-sys = { version = "0.3", features = ["Geolocation", "Navigator", "Window", "
 js-sys = "0.3"
 argon2 = { version = "0.5", features = ["std"] }
 totp-rs = { version = "5.7", features = ["qr"] }
+webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"], optional = true }
+url = "2.5"
 tower-sessions = { version = "0.15.0", optional = true }
 tower-sessions-sqlx-store = { git = "https://github.com/maxcountryman/tower-sessions-stores", branch = "main", features = ["postgres"], optional = true }
 base64 = "0.22"
@@ -57,6 +59,7 @@ ssr = [
     "dep:arrow",
     "dep:tower-sessions",
     "dep:tower-sessions-sqlx-store",
+    "dep:webauthn-rs",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",

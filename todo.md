@@ -1,18 +1,19 @@
-- write some docs on usage and hosting
-- write some ADRs
-- write a test suite
-- remove generated artifacts from git repo
-  - data sources
-  - things that rust is using to compile and generate
-- make the use of nominatim on a hosted website optional
-- on display dont use county use region
-- import country data as well
-  - first column contains a code for country.
-- write stuff so it can all be hosted as an app on TrueNAS
-- allow a map view of all results on an explore page
-- add a toggle to only show open pubs
-- allow people to see all pubs in a region as list without having to go down to town or outcode
-- when showing streak and years ingore if the pub has an entry in 1972.
-- add an about page
-  - mention that 1972 was a trial run of the GBG so while the data is here its not used for appearances in the GBG.
-- add disclaimer that pubs may not be open
+# Todo
+
+- where we dont have ids for untappd, google and whatpub provide a search link
+  instead for those services
+- when editing provide a link to the google place finder thing to get the id
+- add normal users who can keep a list of places they have visited and can export
+  that list
+  - those users should still be invite only
+- allow creation of users without totp but they must add it on first login
+- normal users when logged in can suggest updates to the pubs. these updates are
+  then triaged and applied by admins
+- allow admins to have pages where they can see what stuff is missing for pubs.
+- add the ability to add a flickr photo.
+  - ensure that that is CC licenced
+  - there is copyright added for the user who took the phoot
+  - link the photo back to the flickr pages
+  - link to licence
+- allow admins to bulk edit at the town, postcode and region levels
+- add the use of passkeys to login

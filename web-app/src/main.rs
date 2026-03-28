@@ -43,6 +43,12 @@ async fn main() {
         .await
         .expect("Failed to connect to Postgres");
 
+    // Run database migrations
+    sqlx::migrate!("../migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run database migrations");
+
     // Session setup
     let session_store = PostgresStore::new(pool.clone());
     session_store.migrate().await.expect("Failed to migrate session store");
