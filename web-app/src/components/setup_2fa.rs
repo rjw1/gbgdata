@@ -68,7 +68,7 @@ pub fn Setup2FA() -> impl IntoView {
                                                 <input type="text" name="code" placeholder="000000" 
                                                     on:input=move |ev| set_code.set(event_target_value(&ev)) required />
                                             </div>
-                                            <button type="submit" disabled=verify_action.pending()>
+                                            <button type="submit" class="btn btn-primary btn-block" disabled=verify_action.pending()>
                                                 {move || if verify_action.pending().get() { "Verifying..." } else { "Enable 2FA" }}
                                             </button>
                                             {move || verify_action.value().get().map(|v| {

@@ -73,7 +73,7 @@ pub fn LoginForm() -> impl IntoView {
                                 <input type="text" name="username" id="username" required 
                                     on:input=move |ev| set_username.set(event_target_value(&ev)) />
                             </div>
-                            <button type="submit" disabled=check_auth_action.pending()>
+                            <button type="submit" class="btn btn-primary btn-block" disabled=check_auth_action.pending()>
                                 {move || if check_auth_action.pending().get() { "Checking..." } else { "Next" }}
                             </button>
                         </ActionForm>
@@ -85,7 +85,7 @@ pub fn LoginForm() -> impl IntoView {
                         {move || match auth_status() {
                             Some(status) if status.has_passkeys => view! {
                                 <div class="passkey-login">
-                                    <button class="passkey-btn" on:click=on_passkey_login disabled=start_passkey_auth.pending()>
+                                    <button type="button" class="btn btn-secondary btn-block" on:click=on_passkey_login disabled=start_passkey_auth.pending()>
                                         {move || if start_passkey_auth.pending().get() { "Starting..." } else { "Login with Passkey" }}
                                     </button>
                                     <div class="divider">"OR"</div>
@@ -100,10 +100,10 @@ pub fn LoginForm() -> impl IntoView {
                                 <label for="password">"Password"</label>
                                 <input type="password" name="password" id="password" required autofocus />
                             </div>
-                            <button type="submit" disabled=login_action.pending()>
+                            <button type="submit" class="btn btn-primary btn-block" disabled=login_action.pending()>
                                 {move || if login_action.pending().get() { "Logging in..." } else { "Login" }}
                             </button>
-                            <button type="button" class="back-btn" on:click=move |_| set_stage.set(1)>"Back"</button>
+                            <button type="button" class="btn btn-ghost btn-block" style="margin-top: 1rem;" on:click=move |_| set_stage.set(1)>"Back"</button>
                             
                             {move || login_action.value().get().map(|v: Result<Option<Uuid>, ServerFnError>| {
                                 if v.is_ok() && v.as_ref().unwrap().is_none() {
@@ -142,7 +142,7 @@ pub fn TotpChallenge(user_id: Uuid) -> impl IntoView {
                         <label for="code">"Code"</label>
                         <input type="text" name="code" id="code" required autocomplete="one-time-code" autofocus />
                     </div>
-                    <button type="submit" disabled=verify_action.pending()>
+                    <button type="submit" class="btn btn-primary btn-block" disabled=verify_action.pending()>
                         {move || if verify_action.pending().get() { "Verifying..." } else { "Verify" }}
                     </button>
                     {move || verify_action.value().get().map(|v| {

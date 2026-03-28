@@ -76,7 +76,7 @@ pub fn Profile() -> impl IntoView {
                                                                     <tr>
                                                                         <td>{hex::encode(&pk.credential_id[..8])}"..."</td>
                                                                         <td>
-                                                                            <button class="delete-btn" 
+                                                                            <button class="btn btn-danger btn-sm" 
                                                                                 on:click=move |_| { delete_action.dispatch(crate::server::DeletePasskey { credential_id: cred_id.clone() }); }
                                                                                 disabled=delete_action.pending()>
                                                                                 "Remove"
@@ -93,7 +93,7 @@ pub fn Profile() -> impl IntoView {
                                             }
                                         })}
                                     </Suspense>
-                                    <button class="add-btn" on:click=move |_| { start_reg_action.dispatch(StartPasskeyRegistration {}); } disabled=start_reg_action.pending()>
+                                    <button class="btn btn-secondary" on:click=move |_| { start_reg_action.dispatch(StartPasskeyRegistration {}); } disabled=start_reg_action.pending()>
                                         {move || if start_reg_action.pending().get() { "Starting..." } else { "Add New Passkey" }}
                                     </button>
                                 </div>

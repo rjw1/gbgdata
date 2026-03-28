@@ -66,7 +66,7 @@ pub fn RegisterPage() -> impl IntoView {
                                 } else {
                                     ().into_any()
                                 }}
-                                <button type="submit" disabled=register_action.pending()>
+                                <button type="submit" class="btn btn-primary btn-block" disabled=register_action.pending()>
                                     {move || if register_action.pending().get() { "Creating Account..." } else { "Create Account" }}
                                 </button>
                                 {move || register_action.value().get().map(|v| {
