@@ -19,7 +19,12 @@ A full-stack Rust application for analyzing and visualizing historical Good Beer
 - **Rule**: Exclude 1972 from all statistical aggregations, inclusion counts, and streaks.
 - **Implementation**: The `pub_stats` materialized view handles this via `FILTER (WHERE year != 1972)`.
 
-### 2.3 Technology Stack
+### 2.3 Administrative Security
+- **Mandatory 2FA**: All administrative actions require a valid session secured by Multi-Factor Authentication (TOTP).
+- **Audit Trail**: Any manual data modification MUST be logged to the `audit_log` table via server-side functions.
+- **Session Store**: Administrative sessions are persisted in the database (`user_sessions` table) to survive server restarts.
+
+### 2.4 Technology Stack
 - **Web**: Leptos (SSR + Hydration), Axum, Leaflet (Map View).
 - **Database**: Postgres + PostGIS (Spatial queries for "Near Me" and Maps).
 - **ORM/Query**: `sqlx` with compile-time verification.
