@@ -1414,24 +1414,26 @@ pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
 pub async fn check_user_auth_type(username: String) -> Result<UserAuthStatus, ServerFnError> {
     use sqlx::PgPool;
     use leptos::context::use_context;
+    use sqlx::Row;
     let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
 
-    let user = sqlx::query!(
-        "SELECT id, totp_setup_completed FROM users WHERE username = $1",
-        username
-    ).fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let user = sqlx::query("SELECT id, totp_setup_completed FROM users WHERE username = $1")
+        .bind(&username)
+        .fetch_optional(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     match user {
         Some(u) => {
-            let passkeys_count = sqlx::query_scalar!(
-                "SELECT COUNT(*) FROM user_credentials WHERE user_id = $1",
-                u.id
-            ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?.unwrap_or(0);
+            let user_id: uuid::Uuid = u.get("id");
+            let setup_completed: bool = u.get("totp_setup_completed");
+            
+            let passkeys_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_credentials WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
             Ok(UserAuthStatus {
-                user_id: Some(u.id),
+                user_id: Some(user_id),
                 has_passkeys: passkeys_count > 0,
-                totp_required: !u.totp_setup_completed,
+                totp_required: !setup_completed,
             })
         }
         None => Ok(UserAuthStatus {
@@ -1578,7 +1580,7 @@ pub async fn get_missing_data_reports(report_type: String) -> Result<Vec<PubSumm
         _ => return Err(ServerFnError::new("Invalid report type")),
     };
 
-    let pubs = sqlx::query_as::<_, PubSummary>(query)
+    let pubs = sqlx::query_as::<sqlx::Postgres, PubSummary>(query)
         .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(pubs)
