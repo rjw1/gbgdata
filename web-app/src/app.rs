@@ -135,6 +135,7 @@ pub fn App() -> impl IntoView {
                 </Routes>
                 <footer>
                     <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>
+                    <p>"Disclaimer: While we track if a pub has been reported as closed, this information may be out of date. Always check with the pub before visiting."</p>
                 </footer>
             </main>
         </Router>
