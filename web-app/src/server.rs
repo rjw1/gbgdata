@@ -1432,15 +1432,17 @@ pub async fn get_totp_setup_info() -> Result<serde_json::Value, ServerFnError> {
         let qr = QrCode::encode_text(&otp_url, QrCodeEcc::Medium).map_err(|e| ServerFnError::new(e.to_string()))?;
         let size = qr.size();
         
-        let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {0} {0}\" fill=\"black\" shape-rendering=\"crispEdges\">\n", size);
+        let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {0} {0}\" shape-rendering=\"crispEdges\">\n", size);
+        svg.push_str(&format!("  <rect width=\"{}\" height=\"{}\" fill=\"white\" />\n", size, size));
+        svg.push_str("  <g fill=\"black\">\n");
         for y in 0..size {
             for x in 0..size {
                 if qr.get_module(x, y) {
-                    svg.push_str(&format!("  <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n", x, y));
+                    svg.push_str(&format!("    <rect x=\"{}\" y=\"{}\" width=\"1\" height=\"1\" />\n", x, y));
                 }
             }
         }
-        svg.push_str("</svg>");
+        svg.push_str("  </g>\n</svg>");
         svg
     };
     let secret = totp.get_secret_base32();
