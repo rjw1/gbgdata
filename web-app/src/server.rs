@@ -80,6 +80,11 @@ pub async fn verify_2fa(user_id: Uuid, code: String) -> Result<bool, ServerFnErr
     };
 
     if success {
+        sqlx::query!(
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1",
+            user_data.id
+        ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
         session::login(&session, &User {
             id: user_data.id,
             username: user_data.username,
@@ -992,15 +997,20 @@ pub async fn finish_passkey_authentication(auth_response: serde_json::Value) -> 
     let user_data = sqlx::query!(
         "SELECT id, username, role, totp_setup_completed FROM users WHERE username = $1",
         username
-    )
-    .fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1",
+        user_data.id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
     session::login(&session, &User {
         id: user_data.id,
         username: user_data.username,
         role: user_data.role,
         totp_setup_completed: user_data.totp_setup_completed,
     }).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
     
     session.remove::<PasskeyAuthentication>("authentication_state").await.map_err(|e| ServerFnError::new(e.to_string()))?;
     session.remove::<String>("auth_username").await.map_err(|e| ServerFnError::new(e.to_string()))?;
