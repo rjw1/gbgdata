@@ -141,9 +141,14 @@ fn RouterContent() -> impl IntoView {
                     <A href="/about">"About"</A>
                     " | "
                     <A href="/profile">"Profile"</A>
+                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin")>
+                        " | "
+                        <A href="/admin">"Admin"</A>
+                    </Show>
                     " | "
                     <A href="/login">"Login"</A>
                 </div>
+
                 <ThemeToggle />
             </nav>
             <Routes fallback=|| view! { "Page not found." }>
