@@ -70,11 +70,13 @@ pub fn PubList() -> impl IntoView {
                     sort=Signal::from(sort) 
                     on_change=Callback::new(move |mode| set_sort.set(mode)) 
                 />
-                <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
-                    <button class="btn btn-secondary" on:click=move |_| set_bulk_mode.update(|b| *b = !*b)>
-                        {move || if bulk_mode.get() { "Cancel Bulk Edit" } else { "Bulk Edit" }}
-                    </button>
-                </Show>
+                <Suspense fallback=|| ()>
+                    <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
+                        <button class="btn btn-secondary" on:click=move |_| set_bulk_mode.update(|b| *b = !*b)>
+                            {move || if bulk_mode.get() { "Cancel Bulk Edit" } else { "Bulk Edit" }}
+                        </button>
+                    </Show>
+                </Suspense>
             </div>
 
             <Show when=move || bulk_mode.get()>
