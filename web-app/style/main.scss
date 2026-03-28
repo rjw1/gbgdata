@@ -77,6 +77,31 @@ nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
+
+  a, .logout-link {
+    color: var(--forest-green);
+    text-decoration: none;
+    font-weight: bold;
+    padding: 0.5rem 0;
+    display: inline-block;
+    
+    &:hover {
+      color: var(--amber);
+    }
+  }
+
+  .logout-link {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  form {
+    display: inline;
+  }
 }
 
 .theme-toggle {
@@ -101,14 +126,6 @@ a {
   &:hover {
     text-decoration: underline;
   }
-}
-
-nav a {
-  color: var(--forest-green);
-  text-decoration: none;
-  font-weight: bold;
-  padding: 0.5rem 0;
-  display: inline-block;
 }
 
 .list-controls {

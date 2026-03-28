@@ -10,6 +10,7 @@ use crate::components::setup_2fa::Setup2FA;
 use crate::components::profile::Profile;
 use crate::components::admin::AdminDashboard;
 use crate::components::my_visits::MyVisits;
+use crate::server::Logout;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Meta, Stylesheet, Title};
 use leptos_router::{
@@ -125,6 +126,8 @@ fn RouterContent() -> impl IntoView {
         }
     });
 
+    let logout_action = ServerAction::<Logout>::new();
+
     view! {
         <main>
             <nav>
@@ -148,13 +151,24 @@ fn RouterContent() -> impl IntoView {
                             <A href="/admin">"Admin"</A>
                         </Show>
                     </Suspense>
-                    " | "
-                    <A href="/login">"Login"</A>
-
+                    <Suspense fallback=|| view! { " | " <A href="/login">"Login"</A> }>
+                        {move || match user.get() {
+                            Some(Ok(Some(_))) => view! {
+                                " | "
+                                <ActionForm action=logout_action>
+                                    <button type="submit" class="logout-link">"Logout"</button>
+                                </ActionForm>
+                            }.into_any(),
+                            _ => view! {
+                                " | "
+                                <A href="/login">"Login"</A>
+                            }.into_any(),
+                        }}
+                    </Suspense>
                 </div>
-
                 <ThemeToggle />
             </nav>
+
             <Routes fallback=|| view! { "Page not found." }>
                 <Route path=path!("/") view=PubList/>
                 <Route path=path!("/login") view=LoginForm/>
