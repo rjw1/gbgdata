@@ -676,10 +676,11 @@ nav a {
   border-radius: 8px;
   border: 1px solid var(--border);
 
-  .qr-code img {
+  .qr-code svg {
     max-width: 250px;
     height: auto;
-    border: 8px solid white;
+    background: white;
+    padding: 8px;
     border-radius: 4px;
   }
 
