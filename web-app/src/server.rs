@@ -1448,12 +1448,31 @@ pub async fn logout() -> Result<(), ServerFnError> {
 
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
     use tower_sessions::Session;
     use leptos_axum::extract;
     use crate::auth::session;
 
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    
     if let Ok(s) = extract::<Session>().await {
-        Ok(session::get_user(&s).await)
+        if let Some(user_session) = session::get_user(&s).await {
+            // Fetch fresh data from DB
+            let user = sqlx::query!(
+                "SELECT id, username, role, totp_setup_completed FROM users WHERE id = $1",
+                user_session.id
+            ).fetch_one(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+            Ok(Some(User {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                totp_setup_completed: user.totp_setup_completed,
+            }))
+        } else {
+            Ok(None)
+        }
     } else {
         Ok(None)
     }
