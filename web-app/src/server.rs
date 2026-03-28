@@ -1097,6 +1097,16 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
 
         let data = suggestion.suggested_data;
         
+        let parse_bool = |v: &serde_json::Value| {
+            v.as_bool().or_else(|| {
+                v.as_str().map(|s| s == "true")
+            })
+        };
+
+        let parse_str = |v: &serde_json::Value| {
+            v.as_str().map(|s| s.to_string())
+        };
+
         // Patch the pub record
         sqlx::query!(
             "UPDATE pubs SET 
@@ -1110,21 +1120,24 @@ pub async fn process_suggested_update(suggestion_id: Uuid, approve: bool) -> Res
                 google_maps_id = COALESCE($8, google_maps_id),
                 untappd_id = COALESCE($9, untappd_id)
              WHERE id = $10",
-            data["name"].as_str(),
-            data["address"].as_str(),
-            data["town"].as_str(),
-            data["region"].as_str(),
-            data["postcode"].as_str(),
-            data["closed"].as_bool(),
-            data["whatpub_id"].as_str(),
-            data["google_maps_id"].as_str(),
-            data["untappd_id"].as_str(),
+            parse_str(&data["name"]),
+            parse_str(&data["address"]),
+            parse_str(&data["town"]),
+            parse_str(&data["region"]),
+            parse_str(&data["postcode"]),
+            parse_bool(&data["closed"]),
+            parse_str(&data["whatpub_id"]),
+            parse_str(&data["google_maps_id"]),
+            parse_str(&data["untappd_id"]),
             suggestion.pub_id
         ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Update years if present
         if let Some(years) = data["years"].as_array() {
-            let years_vec: Vec<i32> = years.iter().filter_map(|v| v.as_i64().map(|y| y as i32)).collect();
+            let years_vec: Vec<i32> = years.iter().filter_map(|v| {
+                v.as_i64().map(|y| y as i32)
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
+            }).collect();
             
             // This is simple but effective: clear and re-insert
             sqlx::query!("DELETE FROM gbg_history WHERE pub_id = $1", suggestion.pub_id)
