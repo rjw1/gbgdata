@@ -1,7 +1,8 @@
-#[cfg(feature = "ssr")]
-use axum::response::IntoResponse;
+#![recursion_limit = "2048"]
 #[cfg(feature = "ssr")]
 use axum::http::header;
+#[cfg(feature = "ssr")]
+use axum::response::IntoResponse;
 
 #[cfg(feature = "ssr")]
 async fn robots_txt() -> impl IntoResponse {
@@ -22,18 +23,18 @@ async fn favicon_ico() -> impl IntoResponse {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
-    use axum::Router;
+    use axum::http::{header, HeaderValue};
     use axum::routing::get;
-    use axum::http::{HeaderValue, header};
-    use web_app::app::*;
-    use web_app::export::*;
+    use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use sqlx::postgres::PgPoolOptions;
     use tower_http::services::ServeDir;
     use tower_http::set_header::SetResponseHeaderLayer;
-    use tower_sessions::{SessionManagerLayer, Expiry};
+    use tower_sessions::{Expiry, SessionManagerLayer};
     use tower_sessions_sqlx_store::PostgresStore;
+    use web_app::app::*;
+    use web_app::export::*;
 
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -51,16 +52,21 @@ async fn main() {
 
     // Session setup
     let session_store = PostgresStore::new(pool.clone());
-    session_store.migrate().await.expect("Failed to migrate session store");
+    session_store
+        .migrate()
+        .await
+        .expect("Failed to migrate session store");
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false) // Set to true in production with HTTPS
-        .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::days(7)));
+        .with_expiry(Expiry::OnInactivity(
+            tower_sessions::cookie::time::Duration::days(7),
+        ));
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
-    
+
     let state = AppState {
         leptos_options: leptos_options.clone(),
         pool: pool.clone(),
@@ -70,7 +76,10 @@ async fn main() {
     let routes = generate_route_list(App);
 
     let app = Router::new()
-        .nest_service("/pkg", ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)))
+        .nest_service(
+            "/pkg",
+            ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)),
+        )
         .nest_service("/assets", ServeDir::new(&*leptos_options.site_root))
         .route("/robots.txt", get(robots_txt))
         .route("/favicon.ico", get(favicon_ico))
@@ -104,9 +113,32 @@ async fn main() {
             HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("x-frame-options"),
+            header::X_FRAME_OPTIONS,
             HeaderValue::from_static("DENY"),
         ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("default-src 'self'; script-src 'self' unpkg.com; style-src 'self' 'unsafe-inline' unpkg.com; img-src 'self' data: *.tile.openstreetmap.org unpkg.com;"),
+        ));
+
+    let app = if std::env::var("LEPTOS_ENV").unwrap_or_default() == "production" {
+        app.layer(SetResponseHeaderLayer::overriding(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+    } else {
+        app
+    };
+
+    let app = app
         .layer(session_layer)
         .with_state(state);
 
