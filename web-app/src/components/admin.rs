@@ -38,11 +38,12 @@ pub fn AdminDashboard() -> impl IntoView {
 
     let update_role_action = ServerAction::<crate::server::UpdateUserRole>::new();
     let reset_2fa_action = ServerAction::<crate::server::ResetUser2FA>::new();
+    let delete_user_action = ServerAction::<crate::server::DeleteUser>::new();
     let create_invite_action = ServerAction::<crate::server::CreateInvite>::new();
     let revoke_invite_action = ServerAction::<crate::server::RevokeInvite>::new();
 
     Effect::new(move |_| {
-        if update_role_action.value().get().is_some() || reset_2fa_action.value().get().is_some() {
+        if update_role_action.value().get().is_some() || reset_2fa_action.value().get().is_some() || delete_user_action.value().get().is_some() {
             users_list.refetch();
         }
     });
@@ -259,6 +260,12 @@ pub fn AdminDashboard() -> impl IntoView {
                                                                     <button on:click=move |_| {
                                                                         reset_2fa_action.dispatch(crate::server::ResetUser2FA { user_id: id });
                                                                     } disabled=reset_2fa_action.pending()>"Reset 2FA"</button>
+                                                                    <button class="delete-btn" on:click=move |_| {
+                                                                        let confirm = web_sys::window().unwrap().confirm_with_message("Are you sure you want to delete this user?").unwrap_or(false);
+                                                                        if confirm {
+                                                                            delete_user_action.dispatch(crate::server::DeleteUser { user_id: id });
+                                                                        }
+                                                                    } disabled=delete_user_action.pending()>"Delete"</button>
                                                                 </td>
                                                             </tr>
                                                         }

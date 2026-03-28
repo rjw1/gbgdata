@@ -1868,6 +1868,42 @@ pub async fn reset_user_2fa(user_id: Uuid) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[server(DeleteUser, "/api")]
+pub async fn delete_user(user_id: Uuid) -> Result<(), ServerFnError> {
+    use sqlx::PgPool;
+    use leptos::context::use_context;
+    use tower_sessions::Session;
+    use leptos_axum::extract;
+    use crate::auth::session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let admin = session::get_user(&session).await.ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if admin.role != "admin" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    if admin.id == user_id {
+        return Err(ServerFnError::new("You cannot delete yourself"));
+    }
+
+    // Delete related data first (though DB schema should handle CASCADE)
+    sqlx::query!("DELETE FROM user_visits WHERE user_id = $1", user_id)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    sqlx::query!("DELETE FROM user_credentials WHERE user_id = $1", user_id)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    sqlx::query!("DELETE FROM users WHERE id = $1", user_id)
+        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    sqlx::query!(
+        "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
+        admin.id, "delete_user", "user", user_id
+    ).execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
 #[server(BulkUpdatePubsList, "/api")]
 pub async fn bulk_update_pubs_list(ids: Vec<Uuid>, action: String, value: String) -> Result<(), ServerFnError> {
     use sqlx::PgPool;
