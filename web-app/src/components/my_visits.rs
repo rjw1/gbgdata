@@ -75,6 +75,9 @@ pub fn MyVisits() -> impl IntoView {
                                     latest_year: None,
                                     total_years_rank: None,
                                     current_streak: None,
+                                    whatpub_id: None,
+                                    google_maps_id: None,
+                                    untappd_id: None,
                                 }).collect::<Vec<_>>()
                             });
 
