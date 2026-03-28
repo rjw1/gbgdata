@@ -5,9 +5,21 @@ use leptos_router::components::A;
 use crate::server::{get_nearby_pubs, geocode_manual};
 use crate::models::{SortMode};
 use crate::components::sort::SortSelector;
+#[cfg(feature = "hydrate")]
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "hydrate")]
 use wasm_bindgen::prelude::*;
+
+#[cfg(feature = "hydrate")]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct NearMeState {
+    lat_lon: Option<(f64, f64)>,
+    radius: f64,
+    search_text: String,
+    sort: SortMode,
+    open_only: bool,
+}
 
 #[component]
 pub fn NearMe() -> impl IntoView {
@@ -18,6 +30,42 @@ pub fn NearMe() -> impl IntoView {
     let (error, set_error) = signal(None::<String>);
     let (sort, set_sort) = signal(SortMode::Distance); // Default to Distance for Near Me
     let (open_only, set_open_only) = signal(false);
+
+    // Restore state from localStorage on hydrate
+    #[cfg(feature = "hydrate")]
+    Effect::new(move |_| {
+        let storage = window().local_storage().ok().flatten();
+        if let Some(storage) = storage {
+            if let Ok(Some(json)) = storage.get_item("gbg_near_me_search") {
+                if let Ok(state) = serde_json::from_str::<NearMeState>(&json) {
+                    set_lat_lon.set(state.lat_lon);
+                    set_radius.set(state.radius);
+                    set_search_text.set(state.search_text);
+                    set_sort.set(state.sort);
+                    set_open_only.set(state.open_only);
+                }
+            }
+        }
+    });
+
+    // Persist state to localStorage on changes
+    #[cfg(feature = "hydrate")]
+    Effect::new(move |_| {
+        let state = NearMeState {
+            lat_lon: lat_lon.get(),
+            radius: radius.get(),
+            search_text: search_text.get(),
+            sort: sort.get(),
+            open_only: open_only.get(),
+        };
+        
+        let storage = window().local_storage().ok().flatten();
+        if let Some(storage) = storage {
+            if let Ok(json) = serde_json::to_string(&state) {
+                let _ = storage.set_item("gbg_near_me_search", &json);
+            }
+        }
+    });
 
     let pubs = Resource::new(
         move || (lat_lon.get(), radius.get(), sort.get(), open_only.get()),
@@ -45,6 +93,7 @@ pub fn NearMe() -> impl IntoView {
                 let lat = js_sys::Reflect::get(&coords, &JsValue::from_str("latitude")).unwrap().as_f64().unwrap();
                 let lon = js_sys::Reflect::get(&coords, &JsValue::from_str("longitude")).unwrap().as_f64().unwrap();
                 
+                set_search_text.set(String::new());
                 set_lat_lon.set(Some((lat, lon)));
                 set_loading.set(false);
             }) as Box<dyn FnMut(JsValue)>);
