@@ -108,3 +108,22 @@ pub async fn refresh_pub_stats(pool: &PgPool) -> Result<()> {
         .await?;
     Ok(())
 }
+
+pub async fn create_user(
+    pool: &PgPool,
+    username: &str,
+    password_hash: &str,
+    totp_secret_enc: &[u8],
+    recovery_codes: Vec<String>,
+) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO users (username, password_hash, totp_secret_enc, recovery_codes_hash) VALUES ($1, $2, $3, $4)",
+        username,
+        password_hash,
+        totp_secret_enc,
+        &recovery_codes
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}

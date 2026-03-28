@@ -13,7 +13,7 @@ use geocoder::Geocoder;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Command to run: import (default) or geocode
+    /// Command to run: import (default), geocode, or create-admin
     #[arg(index = 1, default_value = "import")]
     command: String,
 
@@ -28,6 +28,14 @@ struct Args {
     /// Batch size for geocoding
     #[arg(short, long, default_value_t = 100)]
     batch: i64,
+
+    /// Username for the new admin (create-admin command)
+    #[arg(long)]
+    username: Option<String>,
+
+    /// Password for the new admin (create-admin command)
+    #[arg(long)]
+    password: Option<String>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -49,10 +57,82 @@ async fn main() -> Result<()> {
         .connect(&database_url)
         .await?;
 
-    if args.command == "geocode" {
-        run_geocoder(&pool, args.batch).await?;
-    } else {
-        run_import(&pool, args).await?;
+    match args.command.as_str() {
+        "geocode" => run_geocoder(&pool, args.batch).await?,
+        "create-admin" => run_create_admin(&pool, args).await?,
+        _ => run_import(&pool, args).await?,
+    }
+
+    Ok(())
+}
+
+async fn run_create_admin(pool: &sqlx::PgPool, args: Args) -> Result<()> {
+    use argon2::{
+        password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+        Argon2,
+    };
+    use rand::distributions::{Alphanumeric, DistString};
+    use totp_rs::{Algorithm, TOTP};
+
+    let username = args.username.ok_or_else(|| anyhow::anyhow!("--username is required"))?;
+    let password = args.password.ok_or_else(|| anyhow::anyhow!("--password is required"))?;
+
+    println!("Creating admin user: {}...", username);
+
+    // 1. Hash password
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?
+        .to_string();
+
+    // 2. Generate TOTP secret
+    use rand::RngCore;
+    let mut totp_secret = vec![0u8; 20];
+    rand::thread_rng().fill_bytes(&mut totp_secret);
+    let totp = TOTP::new(
+        Algorithm::SHA1,
+        6,
+        1,
+        30,
+        totp_secret.clone(),
+        Some("GBGData".to_string()),
+        username.clone(),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to create TOTP: {}", e))?;
+
+    // 3. Generate recovery codes
+    let mut recovery_codes = Vec::new();
+    for _ in 0..5 {
+        let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 10);
+        recovery_codes.push(code);
+    }
+
+    // Hash recovery codes before storing
+    let hashed_recovery_codes: Vec<String> = recovery_codes
+        .iter()
+        .map(|code| {
+            let salt = SaltString::generate(&mut OsRng);
+            argon2
+                .hash_password(code.as_bytes(), &salt)
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+
+    // 4. Save to DB
+    // In a real app, we should encrypt totp_secret. For now, we'll store it as is (bytea).
+    db::create_user(pool, &username, &password_hash, &totp_secret, hashed_recovery_codes).await?;
+
+    println!("\nSUCCESS: Admin user created.");
+    println!("Username: {}", username);
+    println!("\nIMPORTANT: Set up your TOTP authenticator app now.");
+    println!("TOTP Secret (Base32): {}", totp.get_secret_base32());
+    println!("TOTP Setup URI: {}", totp.get_url());
+    println!("\nRECOVERY CODES (Store these securely!):");
+    for code in &recovery_codes {
+        println!("  {}", code);
     }
 
     Ok(())
