@@ -57,8 +57,9 @@ async fn main() {
         .await
         .expect("Failed to migrate session store");
 
+    let is_prod = std::env::var("LEPTOS_ENV").unwrap_or_default() == "PROD";
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false) // Set to true in production with HTTPS
+        .with_secure(is_prod)
         .with_expiry(Expiry::OnInactivity(
             tower_sessions::cookie::time::Duration::days(7),
         ));
@@ -126,7 +127,7 @@ async fn main() {
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' unpkg.com; style-src 'self' 'unsafe-inline' unpkg.com; img-src 'self' data: *.tile.openstreetmap.org unpkg.com; connect-src 'self';"),
+            HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://unpkg.com/leaflet@1.9.4/; style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/; img-src 'self' data: *.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/; connect-src 'self';"),
         ));
 
     let app = if std::env::var("LEPTOS_ENV").unwrap_or_default() == "production" {

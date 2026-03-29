@@ -13,5 +13,5 @@ pub fn hydrate() {
     console_error_panic_hook::set_once();
     leptos::mount::hydrate_body(App);
 }
-#[cfg(test)]
+#[cfg(all(test, feature = "ssr"))]
 mod tests;

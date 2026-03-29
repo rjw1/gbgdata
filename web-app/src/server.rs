@@ -266,6 +266,7 @@ pub async fn get_pubs_by_location(
     use leptos::context::use_context;
     use sqlx::PgPool;
 
+    #[cfg(debug_assertions)]
     println!(
         "SERVER: get_pubs_by_location(region={:?}, town={:?}, outcode={:?}, year={:?}, sort={:?}, open_only={:?})",
         region, town, outcode, year, sort, open_only
@@ -1941,7 +1942,7 @@ pub async fn get_audit_logs(
 
     let limit = limit.clamp(1, 500); // Cap at 500
 
-    let mut query = String::from(
+    let mut query_builder = sqlx::QueryBuilder::new(
         r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
            FROM audit_log l
            JOIN users u ON l.user_id = u.id
@@ -1949,12 +1950,21 @@ pub async fn get_audit_logs(
     );
 
     if !search.is_empty() {
-        query.push_str(&format!(" AND (u.username ILIKE '%{0}%' OR l.action ILIKE '%{0}%' OR l.entity_type ILIKE '%{0}%')", search.replace("'", "''")));
+        let search_pattern = format!("%{}%", search);
+        query_builder.push(" AND (u.username ILIKE ");
+        query_builder.push_bind(search_pattern.clone());
+        query_builder.push(" OR l.action ILIKE ");
+        query_builder.push_bind(search_pattern.clone());
+        query_builder.push(" OR l.entity_type ILIKE ");
+        query_builder.push_bind(search_pattern);
+        query_builder.push(")");
     }
 
-    query.push_str(&format!(" ORDER BY l.timestamp DESC LIMIT {}", limit));
+    query_builder.push(" ORDER BY l.timestamp DESC LIMIT ");
+    query_builder.push_bind(limit);
 
-    let logs = sqlx::query_as::<sqlx::Postgres, AuditLogEntry>(&query)
+    let logs = query_builder
+        .build_query_as::<AuditLogEntry>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -2292,19 +2302,19 @@ pub async fn get_users(
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let mut query = String::from("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
+    let mut query_builder = sqlx::QueryBuilder::new("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
     if !search.is_empty() {
-        query.push_str(&format!(
-            " AND username ILIKE '%{}%'",
-            search.replace("'", "''")
-        ));
+        query_builder.push(" AND username ILIKE ");
+        query_builder.push_bind(format!("%{}%", search));
     }
     if role_filter != "all" {
-        query.push_str(&format!(" AND role = '{}'", role_filter.replace("'", "''")));
+        query_builder.push(" AND role = ");
+        query_builder.push_bind(role_filter);
     }
-    query.push_str(" ORDER BY username ASC");
+    query_builder.push(" ORDER BY username ASC");
 
-    let users = sqlx::query_as::<sqlx::Postgres, UserManagementEntry>(&query)
+    let users = query_builder
+        .build_query_as::<UserManagementEntry>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;

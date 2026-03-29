@@ -78,6 +78,14 @@ pub fn MapView(#[prop(into)] pubs: Signal<Vec<PubSummary>>) -> impl IntoView {
                     let _bind_popup =
                         js_sys::Reflect::get(&marker_fn, &JsValue::from_str("bindPopup")).ok(); // This is wrong, it's on the instance
 
+                    let escape_html = |s: &str| -> String {
+                        s.replace('&', "&amp;")
+                            .replace('<', "&lt;")
+                            .replace('>', "&gt;")
+                            .replace('"', "&quot;")
+                            .replace('\'', "&#39;")
+                    };
+
                     for p in list.iter().filter(|p| p.lat.is_some() && p.lon.is_some()) {
                         let lat = p.lat.unwrap();
                         let lon = p.lon.unwrap();
@@ -90,7 +98,9 @@ pub fn MapView(#[prop(into)] pubs: Signal<Vec<PubSummary>>) -> impl IntoView {
                         // Set popup
                         let popup_content = format!(
                             "<b>{}</b><br>{}<br><a href='/pub/{}'>View Details</a>",
-                            p.name, p.town, p.id
+                            escape_html(&p.name),
+                            escape_html(&p.town),
+                            p.id
                         );
                         let set_popup =
                             js_sys::Reflect::get(&marker, &JsValue::from_str("bindPopup"))
