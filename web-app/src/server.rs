@@ -642,24 +642,24 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
 }
 
 #[server(UpdatePub, "/api")]
-#[allow(clippy::too_many_arguments)]
-pub async fn update_pub(
-    id: Uuid,
-    name: String,
-    address: String,
-    town: String,
-    region: String,
-    country_code: Option<String>,
-    postcode: String,
-    closed: bool,
-    lat: Option<f64>,
-    lon: Option<f64>,
-    untappd_id: Option<String>,
-    google_maps_id: Option<String>,
-    whatpub_id: Option<String>,
-    rgl_id: Option<String>,
-    years: Vec<i32>,
-) -> Result<(), ServerFnError> {
+pub async fn update_pub(req: crate::models::UpdatePubRequest) -> Result<(), ServerFnError> {
+    let crate::models::UpdatePubRequest {
+        id,
+        name,
+        address,
+        town,
+        region,
+        country_code,
+        postcode,
+        closed,
+        lat,
+        lon,
+        untappd_id,
+        google_maps_id,
+        whatpub_id,
+        rgl_id,
+        years,
+    } = req;
     use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
