@@ -12,6 +12,8 @@ jobs:
   test:
     name: Lint, Security, and Test
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://test_user:test_password@localhost:5433/gbgdata_test
     
     steps:
       - name: Checkout code
@@ -33,6 +35,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Start Database
+        run: make db-up
+
       - name: Run Lint
         run: make lint
 
@@ -40,6 +45,10 @@ jobs:
         run: make security
 
       - name: Run Tests
-        run: make test
-        env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5433/gbgdata_test
+        run: |
+          cd web-app && cargo test --features ssr
+          cd ../import-tool && cargo test
+
+      - name: Stop Database
+        if: always()
+        run: make db-down

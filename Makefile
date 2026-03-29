@@ -1,9 +1,18 @@
 # gbgdata Makefile
 
-.PHONY: build test lint security e2e all clean
+.PHONY: build test lint security e2e all clean db-up db-down
 
 # Default target
 all: lint security build test
+
+# Database management
+db-up:
+	docker compose -f docker-compose.test.yml up -d
+	sleep 10
+	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test ./scripts/migrate_test_db.sh
+
+db-down:
+	docker compose -f docker-compose.test.yml down
 
 # Build targets
 build:
@@ -12,15 +21,10 @@ build:
 
 # Test targets
 test:
-	docker compose -f docker-compose.test.yml up -d
-	# Wait for DB to be ready
-	sleep 10
-	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test \
-	./scripts/migrate_test_db.sh && \
-	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test \
-	cd web-app && cargo test --features ssr && \
-	cd ../import-tool && cargo test
-	docker compose -f docker-compose.test.yml down
+	make db-up
+	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cd web-app && cargo test --features ssr
+	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cd import-tool && cargo test
+	make db-down
 
 # Linting targets
 lint:
