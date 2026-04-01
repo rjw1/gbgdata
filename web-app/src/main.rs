@@ -124,10 +124,6 @@ async fn main() {
         .layer(SetResponseHeaderLayer::overriding(
             header::REFERRER_POLICY,
             HeaderValue::from_static("strict-origin-when-cross-origin"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://unpkg.com/leaflet@1.9.4/; style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/; img-src 'self' data: *.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/; connect-src 'self' ws://127.0.0.1:3001/live_reload; frame-src 'self' https://www.openstreetmap.org;"),
         ));
 
     let app = if std::env::var("LEPTOS_ENV").unwrap_or_default() == "production" {
