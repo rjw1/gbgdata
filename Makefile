@@ -34,8 +34,8 @@ build:
 # Test targets
 test:
 	make db-up
-	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cd web-app && cargo test --features ssr
-	DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cd import-tool && cargo test
+	cd web-app && DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cargo test --features ssr
+	cd import-tool && DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cargo test
 	make db-down
 
 # Linting targets

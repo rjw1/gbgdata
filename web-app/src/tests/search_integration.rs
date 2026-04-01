@@ -1,3 +1,4 @@
+use crate::server::get_pubs_by_location_db;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -26,15 +27,12 @@ async fn test_get_pubs_by_location_filters_by_region(pool: PgPool) {
         .await
         .unwrap();
 
-    let pubs = sqlx::query("SELECT name FROM pubs WHERE region = $1")
-        .bind("Kent")
-        .fetch_all(&pool)
+    let pubs = get_pubs_by_location_db(&pool, "Kent".to_string(), None, None, None, None, None)
         .await
         .unwrap();
 
     assert_eq!(pubs.len(), 1);
-    let name: String = pubs[0].get("name");
-    assert_eq!(name, "Pub In Kent");
+    assert_eq!(pubs[0].name, "Pub In Kent");
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -61,15 +59,20 @@ async fn test_get_pubs_by_location_filters_by_town(pool: PgPool) {
         .await
         .unwrap();
 
-    let pubs = sqlx::query("SELECT name FROM pubs WHERE town = $1")
-        .bind("Canterbury")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let pubs = get_pubs_by_location_db(
+        &pool,
+        "Kent".to_string(),
+        Some("Canterbury".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(pubs.len(), 1);
-    let name: String = pubs[0].get("name");
-    assert_eq!(name, "Canterbury Pub");
+    assert_eq!(pubs[0].name, "Canterbury Pub");
 }
 
 #[sqlx::test(migrations = "../migrations")]

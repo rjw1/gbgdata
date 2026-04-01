@@ -254,27 +254,52 @@ pub async fn get_region_details(
     })
 }
 
-#[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(
+#[cfg(feature = "ssr")]
+pub fn apply_security_headers<S>(router: axum::Router<S>, is_prod: bool) -> axum::Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::http::{header, HeaderValue};
+    use tower_http::set_header::SetResponseHeaderLayer;
+
+    let router = router
+        .layer(SetResponseHeaderLayer::overriding(
+            header::HeaderName::from_static("x-robots-tag"),
+            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ));
+
+    if is_prod {
+        router.layer(SetResponseHeaderLayer::overriding(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+    } else {
+        router
+    }
+}
+
+#[cfg(feature = "ssr")]
+pub async fn get_pubs_by_location_db(
+    pool: &sqlx::PgPool,
     region: String,
     town: Option<String>,
     outcode: Option<String>,
     year: Option<i32>,
     sort: Option<SortMode>,
     open_only: Option<bool>,
-) -> Result<Vec<PubSummary>, ServerFnError> {
-    use leptos::context::use_context;
-    use sqlx::PgPool;
-
-    #[cfg(debug_assertions)]
-    println!(
-        "SERVER: get_pubs_by_location(region={:?}, town={:?}, outcode={:?}, year={:?}, sort={:?}, open_only={:?})",
-        region, town, outcode, year, sort, open_only
-    );
-
-    let pool =
-        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
-
+) -> Result<Vec<PubSummary>, sqlx::Error> {
     let mut query = String::from(
         r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
@@ -327,20 +352,19 @@ pub async fn get_pubs_by_location(
 
     query.push_str(&format!(" {}", get_order_by(sort, "p.name")));
 
-    // Handle types properly - since year is i32, we need a custom query builder or fixed variants
-    let pubs = if let Some(y) = year {
+    if let Some(y) = year {
         if binds.len() == 2 {
             sqlx::query_as::<_, PubSummary>(&query)
                 .bind(&binds[0])
                 .bind(&binds[1])
                 .bind(y)
-                .fetch_all(&pool)
+                .fetch_all(pool)
                 .await
         } else {
             sqlx::query_as::<_, PubSummary>(&query)
                 .bind(&binds[0])
                 .bind(y)
-                .fetch_all(&pool)
+                .fetch_all(pool)
                 .await
         }
     } else {
@@ -348,18 +372,41 @@ pub async fn get_pubs_by_location(
             sqlx::query_as::<_, PubSummary>(&query)
                 .bind(&binds[0])
                 .bind(&binds[1])
-                .fetch_all(&pool)
+                .fetch_all(pool)
                 .await
         } else {
             sqlx::query_as::<_, PubSummary>(&query)
                 .bind(&binds[0])
-                .fetch_all(&pool)
+                .fetch_all(pool)
                 .await
         }
     }
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+}
 
-    Ok(pubs)
+#[server(GetPubsByLocation, "/api")]
+pub async fn get_pubs_by_location(
+    region: String,
+    town: Option<String>,
+    outcode: Option<String>,
+    year: Option<i32>,
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
+    use leptos::context::use_context;
+    use sqlx::PgPool;
+
+    #[cfg(feature = "ssr")]
+    tracing::debug!(
+        "GetPubsByLocation: region={}, town={:?}, outcode={:?}, year={:?}, sort={:?}, open_only={:?}",
+        region, town, outcode, year, sort, open_only
+    );
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    get_pubs_by_location_db(&pool, region, town, outcode, year, sort, open_only)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 #[server(GetPubs, "/api")]

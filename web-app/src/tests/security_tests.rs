@@ -1,20 +1,12 @@
-use axum::http::{header, HeaderValue};
+use crate::server::apply_security_headers;
+use axum::http::header;
 use axum::{response::Response, routing::get, Router};
 use tower::ServiceExt;
-use tower_http::set_header::SetResponseHeaderLayer;
 
 #[tokio::test]
 async fn test_security_headers_present() {
-    let app = Router::new()
-        .route("/", get(|| async { "ok" }))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_CONTENT_TYPE_OPTIONS,
-            HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_FRAME_OPTIONS,
-            HeaderValue::from_static("DENY"),
-        ));
+    let app = Router::new().route("/", get(|| async { "ok" }));
+    let app = apply_security_headers(app, false);
 
     let response: Response = app
         .oneshot(
@@ -42,6 +34,7 @@ async fn test_security_headers_present() {
 #[tokio::test]
 async fn test_hsts_absent_by_default() {
     let app = Router::new().route("/", get(|| async { "ok" }));
+    let app = apply_security_headers(app, false);
 
     let response: Response = app
         .oneshot(
@@ -57,4 +50,33 @@ async fn test_hsts_absent_by_default() {
         .headers()
         .get(header::STRICT_TRANSPORT_SECURITY)
         .is_none());
+}
+
+#[tokio::test]
+async fn test_hsts_present_in_prod() {
+    let app = Router::new().route("/", get(|| async { "ok" }));
+    let app = apply_security_headers(app, true);
+
+    let response: Response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response
+        .headers()
+        .get(header::STRICT_TRANSPORT_SECURITY)
+        .is_some());
+
+    assert_eq!(
+        response
+            .headers()
+            .get(header::STRICT_TRANSPORT_SECURITY)
+            .unwrap(),
+        "max-age=31536000; includeSubDomains"
+    );
 }

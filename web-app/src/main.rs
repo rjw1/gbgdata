@@ -23,20 +23,24 @@ async fn favicon_ico() -> impl IntoResponse {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
-    use axum::http::{header, HeaderValue};
     use axum::routing::get;
     use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use sqlx::postgres::PgPoolOptions;
     use tower_http::services::ServeDir;
-    use tower_http::set_header::SetResponseHeaderLayer;
     use tower_sessions::{Expiry, SessionManagerLayer};
     use tower_sessions_sqlx_store::PostgresStore;
     use web_app::app::*;
     use web_app::export::*;
 
     dotenvy::dotenv().ok();
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "web_app=debug,tower_http=debug");
+    }
+    tracing_subscriber::fmt::init();
+
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -57,7 +61,9 @@ async fn main() {
         .await
         .expect("Failed to migrate session store");
 
-    let is_prod = std::env::var("LEPTOS_ENV").unwrap_or_default() == "PROD";
+    let is_prod = std::env::var("LEPTOS_ENV").map(|v| v.to_lowercase()).unwrap_or_default();
+    let is_prod = is_prod == "prod" || is_prod == "production";
+
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(is_prod)
         .with_expiry(Expiry::OnInactivity(
@@ -108,32 +114,9 @@ async fn main() {
                 let leptos_options = leptos_options.clone();
                 move || shell(leptos_options.clone())
             },
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_FRAME_OPTIONS,
-            HeaderValue::from_static("DENY"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_CONTENT_TYPE_OPTIONS,
-            HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::REFERRER_POLICY,
-            HeaderValue::from_static("strict-origin-when-cross-origin"),
         ));
 
-    let app = if std::env::var("LEPTOS_ENV").unwrap_or_default() == "production" {
-        app.layer(SetResponseHeaderLayer::overriding(
-            header::STRICT_TRANSPORT_SECURITY,
-            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
-        ))
-    } else {
-        app
-    };
+    let app = web_app::server::apply_security_headers(app, is_prod);
 
     let app = app.layer(session_layer).with_state(state);
 

@@ -11,7 +11,8 @@ test("homepage loads and shows pub list", async ({ page }) => {
 
 test("unauthenticated user cannot access admin", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/admin/);
+  await expect(page.locator("body")).toContainText("Access Denied. Please login.");
 });
 
 test("navigation to Explore page", async ({ page }) => {
