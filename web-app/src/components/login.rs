@@ -45,7 +45,7 @@ pub fn LoginForm() -> impl IntoView {
             {
                 use wasm_bindgen_futures::spawn_local;
                 let challenge_cloned = _challenge.clone();
-                let finish_auth = finish_passkey_auth;
+                let finish_auth = finish_passkey_auth.clone();
 
                 spawn_local(async move {
                     let result = crate::auth::client::authenticate(&challenge_cloned).await;

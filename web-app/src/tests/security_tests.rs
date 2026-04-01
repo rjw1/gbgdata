@@ -22,11 +22,18 @@ async fn test_security_headers_present() {
         response
             .headers()
             .get(header::X_CONTENT_TYPE_OPTIONS)
+            .unwrap()
+            .to_str()
             .unwrap(),
         "nosniff"
     );
     assert_eq!(
-        response.headers().get(header::X_FRAME_OPTIONS).unwrap(),
+        response
+            .headers()
+            .get(header::X_FRAME_OPTIONS)
+            .unwrap()
+            .to_str()
+            .unwrap(),
         "DENY"
     );
 }
@@ -76,6 +83,8 @@ async fn test_hsts_present_in_prod() {
         response
             .headers()
             .get(header::STRICT_TRANSPORT_SECURITY)
+            .unwrap()
+            .to_str()
             .unwrap(),
         "max-age=31536000; includeSubDomains"
     );

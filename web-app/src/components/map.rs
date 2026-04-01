@@ -75,8 +75,6 @@ pub fn MapView(#[prop(into)] pubs: Signal<Vec<PubSummary>>) -> impl IntoView {
                         .unwrap()
                         .dyn_into::<js_sys::Function>()
                         .unwrap();
-                    let _bind_popup =
-                        js_sys::Reflect::get(&marker_fn, &JsValue::from_str("bindPopup")).ok(); // This is wrong, it's on the instance
 
                     let escape_html = |s: &str| -> String {
                         s.replace('&', "&amp;")

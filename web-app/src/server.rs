@@ -262,7 +262,17 @@ where
     use axum::http::{header, HeaderValue};
     use tower_http::set_header::SetResponseHeaderLayer;
 
+    let csp = if is_prod {
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org;"
+    } else {
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org ws:;"
+    };
+
     let router = router
+        .layer(SetResponseHeaderLayer::overriding(
+            header::HeaderName::from_static("content-security-policy"),
+            HeaderValue::from_static(csp),
+        ))
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("x-robots-tag"),
             HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
@@ -326,23 +336,20 @@ pub async fn get_pubs_by_location_db(
 
     query.push_str(" WHERE p.region = $1");
 
-    let mut binds: Vec<String> = vec![region];
     let mut param_idx = 2;
 
-    if let Some(t) = town {
+    if town.is_some() {
         query.push_str(&format!(" AND p.town = ${}", param_idx));
-        binds.push(t);
         param_idx += 1;
-    } else if let Some(o) = outcode {
+    } else if outcode.is_some() {
         query.push_str(&format!(
             " AND SPLIT_PART(p.postcode, ' ', 1) = ${}",
             param_idx
         ));
-        binds.push(o);
         param_idx += 1;
     }
 
-    if let Some(_y) = year {
+    if year.is_some() {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
     }
 
@@ -352,35 +359,19 @@ pub async fn get_pubs_by_location_db(
 
     query.push_str(&format!(" {}", get_order_by(sort, "p.name")));
 
-    if let Some(y) = year {
-        if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(&binds[1])
-                .bind(y)
-                .fetch_all(pool)
-                .await
-        } else {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(y)
-                .fetch_all(pool)
-                .await
-        }
-    } else {
-        if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(&binds[1])
-                .fetch_all(pool)
-                .await
-        } else {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .fetch_all(pool)
-                .await
-        }
+    let mut q = sqlx::query_as::<_, PubSummary>(&query).bind(&region);
+
+    if let Some(t) = town {
+        q = q.bind(t);
+    } else if let Some(o) = outcode {
+        q = q.bind(o);
     }
+
+    if let Some(y) = year {
+        q = q.bind(y);
+    }
+
+    q.fetch_all(pool).await
 }
 
 #[server(GetPubsByLocation, "/api")]
@@ -1569,49 +1560,6 @@ pub async fn bulk_update_pubs(
     if user.role != "admin" && user.role != "owner" {
         return Err(ServerFnError::new("Unauthorized"));
     }
-
-    let mut query = String::from("UPDATE pubs SET id = id"); // No-op to start
-    let mut param_idx = 1;
-    let mut binds = Vec::new();
-
-    if let Some(c) = closed {
-        query.push_str(&format!(", closed = ${}", param_idx));
-        param_idx += 1;
-        binds.push(c.to_string());
-    }
-    if let Some(v) = untappd_verified {
-        query.push_str(&format!(", untappd_verified = ${}", param_idx));
-        param_idx += 1;
-        binds.push(v.to_string());
-    }
-
-    query.push_str(" WHERE 1=1");
-
-    if let Some(ref r) = region {
-        query.push_str(&format!(" AND region = ${}", param_idx));
-        param_idx += 1;
-        binds.push(r.clone());
-    }
-    if let Some(ref t) = town {
-        query.push_str(&format!(" AND town = ${}", param_idx));
-        param_idx += 1;
-        binds.push(t.clone());
-    }
-    if let Some(ref o) = outcode {
-        query.push_str(&format!(
-            " AND SPLIT_PART(postcode, ' ', 1) = ${}",
-            param_idx
-        ));
-        binds.push(o.clone());
-    }
-
-    // This is a bit tricky with sqlx because of dynamic number of binds and types.
-    // For now, we just implement a simplified version or use a macro if possible.
-    // Given the constraints, I'll use a direct query for simple cases.
-
-    // ... bind manually based on what we added ...
-    // Since this is complex to do generically in sqlx without a lot of boilerplate,
-    // I'll stick to a more restricted but safe implementation if needed.
 
     let res = sqlx::query::<sqlx::Postgres>("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
                            WHERE (region = $3 OR $3 IS NULL) 

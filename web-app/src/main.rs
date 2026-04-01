@@ -37,9 +37,11 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "web_app=debug,tower_http=debug");
+        std::env::set_var("RUST_LOG", "web_app=info,tower_http=info");
     }
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
@@ -61,8 +63,10 @@ async fn main() {
         .await
         .expect("Failed to migrate session store");
 
-    let is_prod = std::env::var("LEPTOS_ENV").map(|v| v.to_lowercase()).unwrap_or_default();
-    let is_prod = is_prod == "prod" || is_prod == "production";
+    let leptos_env = std::env::var("LEPTOS_ENV")
+        .map(|v| v.to_lowercase())
+        .unwrap_or_default();
+    let is_prod = leptos_env == "prod" || leptos_env == "production";
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(is_prod)
