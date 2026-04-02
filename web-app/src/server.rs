@@ -333,7 +333,9 @@ pub async fn get_pubs_by_location_db(
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
+                  s.entries_rank,
                   s.current_streak,
+                  s.streak_rank,
                   p.whatpub_id,
                   p.google_maps_id,
                   p.untappd_id
@@ -435,7 +437,9 @@ pub async fn get_pubs(
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
+                  s.entries_rank,
                   s.current_streak,
+                  s.streak_rank,
                   p.whatpub_id,
                   p.google_maps_id,
                   p.untappd_id
@@ -498,7 +502,9 @@ pub async fn get_ranked_pubs(
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
+                  s.entries_rank,
                   s.current_streak,
+                  s.streak_rank,
                   p.whatpub_id,
                   p.google_maps_id,
                   p.untappd_id
@@ -607,7 +613,9 @@ pub async fn get_nearby_pubs(
                   ST_X(p.location::geometry) as lon,
                   s.latest_year,
                   s.total_years as total_years_rank,
+                  s.entries_rank,
                   s.current_streak,
+                  s.streak_rank,
                   p.whatpub_id,
                   p.google_maps_id,
                   p.untappd_id
@@ -651,9 +659,11 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
                   ST_Y(p.location::geometry) as lat,
                   ST_X(p.location::geometry) as lon,
                   COALESCE(s.current_streak, 0) as current_streak,
+                  COALESCE(s.streak_rank, 0) as streak_rank,
                   COALESCE(s.last_5_years, 0) as last_5_years,
                   COALESCE(s.last_10_years, 0) as last_10_years,
                   COALESCE(s.total_years, 0) as total_years,
+                  COALESCE(s.entries_rank, 0) as entries_rank,
                   s.first_year,
                   s.latest_year
            FROM pubs p
@@ -690,9 +700,11 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
         lat: row.get("lat"),
         lon: row.get("lon"),
         current_streak: row.get("current_streak"),
+        streak_rank: row.get("streak_rank"),
         last_5_years: row.get("last_5_years"),
         last_10_years: row.get("last_10_years"),
         total_years: row.get("total_years"),
+        entries_rank: row.get("entries_rank"),
         first_year: row.get("first_year"),
         latest_year: row.get("latest_year"),
         years,
@@ -2300,7 +2312,9 @@ pub async fn get_missing_data_reports(
                   CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, 
                   s.latest_year, 
                   s.total_years as total_years_rank, 
+                  s.entries_rank,
                   s.current_streak, 
+                  s.streak_rank,
                   p.whatpub_id, 
                   p.google_maps_id, 
                   p.untappd_id 

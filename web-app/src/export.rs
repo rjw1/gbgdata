@@ -63,9 +63,11 @@ pub mod ssr_export {
                       ST_Y(p.location::geometry) as lat,
                       ST_X(p.location::geometry) as lon,
                       COALESCE(s.current_streak, 0) as current_streak,
+                      COALESCE(s.streak_rank, 0) as streak_rank,
                       COALESCE(s.last_5_years, 0) as last_5_years,
                       COALESCE(s.last_10_years, 0) as last_10_years,
                       COALESCE(s.total_years, 0) as total_years,
+                      COALESCE(s.entries_rank, 0) as entries_rank,
                       s.first_year,
                       s.latest_year,
                       COALESCE((SELECT ARRAY_AGG(year ORDER BY year DESC) FROM gbg_history WHERE pub_id = p.id), ARRAY[]::integer[]) as years
@@ -119,9 +121,11 @@ pub mod ssr_export {
                 lat: row.get("lat"),
                 lon: row.get("lon"),
                 current_streak: row.get("current_streak"),
+                streak_rank: row.get("streak_rank"),
                 last_5_years: row.get("last_5_years"),
                 last_10_years: row.get("last_10_years"),
                 total_years: row.get("total_years"),
+                entries_rank: row.get("entries_rank"),
                 first_year: row.get("first_year"),
                 latest_year: row.get("latest_year"),
                 years: row.get("years"),
@@ -151,9 +155,11 @@ pub mod ssr_export {
             "lat",
             "lon",
             "current_streak",
+            "streak_rank",
             "last_5_years",
             "last_10_years",
             "total_years",
+            "entries_rank",
             "first_year",
             "latest_year",
             "years",
@@ -181,9 +187,11 @@ pub mod ssr_export {
                 p.lat.map(|v| v.to_string()).unwrap_or_default(),
                 p.lon.map(|v| v.to_string()).unwrap_or_default(),
                 p.current_streak.to_string(),
+                p.streak_rank.to_string(),
                 p.last_5_years.to_string(),
                 p.last_10_years.to_string(),
                 p.total_years.to_string(),
+                p.entries_rank.to_string(),
                 p.first_year.map(|v| v.to_string()).unwrap_or_default(),
                 p.latest_year.map(|v| v.to_string()).unwrap_or_default(),
                 years_str,
@@ -210,7 +218,9 @@ pub mod ssr_export {
             Field::new("lat", DataType::Float64, true),
             Field::new("lon", DataType::Float64, true),
             Field::new("current_streak", DataType::Int32, false),
+            Field::new("streak_rank", DataType::Int64, false),
             Field::new("total_years", DataType::Int64, false),
+            Field::new("entries_rank", DataType::Int64, false),
         ]));
 
         let id_array = StringArray::from(
@@ -244,8 +254,12 @@ pub mod ssr_export {
             Float64Array::from(data.iter().map(|p| p.lon).collect::<Vec<Option<f64>>>());
         let streak_array =
             Int32Array::from(data.iter().map(|p| p.current_streak).collect::<Vec<i32>>());
+        let streak_rank_array =
+            Int64Array::from(data.iter().map(|p| p.streak_rank).collect::<Vec<i64>>());
         let total_array =
             Int64Array::from(data.iter().map(|p| p.total_years).collect::<Vec<i64>>());
+        let entries_rank_array =
+            Int64Array::from(data.iter().map(|p| p.entries_rank).collect::<Vec<i64>>());
 
         let batch = RecordBatch::try_new(
             schema.clone(),
@@ -260,7 +274,9 @@ pub mod ssr_export {
                 Arc::new(lat_array),
                 Arc::new(lon_array),
                 Arc::new(streak_array),
+                Arc::new(streak_rank_array),
                 Arc::new(total_array),
+                Arc::new(entries_rank_array),
             ],
         )?;
 

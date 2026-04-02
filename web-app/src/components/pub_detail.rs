@@ -193,6 +193,9 @@ pub fn PubDetail() -> impl IntoView {
                                             <div class="hero-streak">
                                                 <span class="streak-number">{p.current_streak}</span>
                                                 <span class="streak-label">"Year Streak"</span>
+                                                <Show when={move || p.streak_rank > 0}>
+                                                    <span class="rank-label">{format!("#{}", p.streak_rank)}</span>
+                                                </Show>
                                             </div>
 
                                             <StatRing value=p.last_10_years max=10 label="Last 10 Years".to_string() />
@@ -204,14 +207,17 @@ pub fn PubDetail() -> impl IntoView {
                                                 <div class="stat-item">
                                                     <span class="stat-label">"Total Inclusions"</span>
                                                     <span class="stat-value">{p.total_years}</span>
+                                                    <Show when={move || p.entries_rank > 0}>
+                                                        <span class="rank-inline">{format!("#{}", p.entries_rank)}</span>
+                                                    </Show>
                                                 </div>
                                                 <div class="stat-item">
                                                     <span class="stat-label">"First Inclusion"</span>
-                                                    <span class="stat-value">{p.first_year.unwrap_or(0)}</span>
+                                                    <span class="stat-value">{p.first_year.map(|y| y.to_string()).unwrap_or_else(|| "—".to_string())}</span>
                                                 </div>
                                                 <div class="stat-item">
                                                     <span class="stat-label">"Latest Inclusion"</span>
-                                                    <span class="stat-value">{p.latest_year.unwrap_or(0)}</span>
+                                                    <span class="stat-value">{p.latest_year.map(|y| y.to_string()).unwrap_or_else(|| "—".to_string())}</span>
                                                 </div>
                                             </div>
 

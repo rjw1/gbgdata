@@ -19,7 +19,7 @@ pub fn Profile() -> impl IntoView {
             {
                 use wasm_bindgen_futures::spawn_local;
                 let challenge_cloned = _challenge.clone();
-                let finish_reg = finish_reg_action.clone();
+                let finish_reg = finish_reg_action;
 
                 spawn_local(async move {
                     let result = crate::auth::client::register(&challenge_cloned).await;
