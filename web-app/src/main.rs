@@ -36,12 +36,11 @@ async fn main() {
 
     dotenvy::dotenv().ok();
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "web_app=info,tower_http=info");
-    }
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    let _ = tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,web_app=info")))
+        .try_init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()

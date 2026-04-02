@@ -263,9 +263,27 @@ where
     use tower_http::set_header::SetResponseHeaderLayer;
 
     let csp = if is_prod {
-        "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org;"
+        "default-src 'self'; \
+         script-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js; \
+         style-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css; \
+         img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/dist/images/; \
+         connect-src 'self' https://nominatim.openstreetmap.org; \
+         font-src 'self'; \
+         object-src 'none'; \
+         frame-ancestors 'none'; \
+         form-action 'self'; \
+         base-uri 'self';"
     } else {
-        "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org ws:;"
+        "default-src 'self'; \
+         script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js; \
+         style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css; \
+         img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/dist/images/; \
+         connect-src 'self' ws: http: https:; \
+         font-src 'self'; \
+         object-src 'none'; \
+         frame-ancestors 'none'; \
+         form-action 'self'; \
+         base-uri 'self';"
     };
 
     let router = router
@@ -1569,12 +1587,48 @@ pub async fn bulk_update_pubs(
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let res = sqlx::query::<sqlx::Postgres>("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
-                           WHERE (region = $3 OR $3 IS NULL) 
-                             AND (town = $4 OR $4 IS NULL) 
-                             AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)")
-        .bind(closed).bind(untappd_verified).bind(region).bind(town).bind(outcode)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let mut query_builder = sqlx::QueryBuilder::new("UPDATE pubs SET ");
+    let mut updates = false;
+
+    if let Some(c) = closed {
+        query_builder.push("closed = ");
+        query_builder.push_bind(c);
+        updates = true;
+    }
+
+    if let Some(v) = untappd_verified {
+        if updates {
+            query_builder.push(", ");
+        }
+        query_builder.push("untappd_verified = ");
+        query_builder.push_bind(v);
+        updates = true;
+    }
+
+    if !updates {
+        return Ok(0);
+    }
+
+    query_builder.push(" WHERE 1=1");
+
+    if let Some(r) = region {
+        query_builder.push(" AND region = ");
+        query_builder.push_bind(r);
+    }
+    if let Some(t) = town {
+        query_builder.push(" AND town = ");
+        query_builder.push_bind(t);
+    }
+    if let Some(o) = outcode {
+        query_builder.push(" AND SPLIT_PART(postcode, ' ', 1) = ");
+        query_builder.push_bind(o);
+    }
+
+    let res = query_builder
+        .build()
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
@@ -2241,14 +2295,43 @@ pub async fn get_missing_data_reports(
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
-    let query = match report_type.as_str() {
-        "coords" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, NULL::float8 as lat, NULL::float8 as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.location IS NULL LIMIT 100",
-        "ids" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL LIMIT 100",
-        "closed" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p JOIN pub_stats s ON p.id = s.pub_id WHERE p.closed = true AND s.latest_year >= 2024 LIMIT 100",
-        _ => return Err(ServerFnError::new("Invalid report type")),
-    };
+    let mut query_builder = sqlx::QueryBuilder::new(
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
+                  NULL::float8 as distance_meters,
+                  CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, 
+                  CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, 
+                  s.latest_year, 
+                  s.total_years as total_years_rank, 
+                  s.current_streak, 
+                  p.whatpub_id, 
+                  p.google_maps_id, 
+                  p.untappd_id 
+           FROM pubs p 
+           LEFT JOIN pub_stats s ON p.id = s.pub_id "#,
+    );
 
-    let pubs = sqlx::query_as::<sqlx::Postgres, PubSummary>(query)
+    match report_type.as_str() {
+        "coords" => {
+            query_builder.push("WHERE p.location IS NULL");
+        }
+        "ids" => {
+            query_builder.push("WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL");
+        }
+        "closed" => {
+            query_builder.push("WHERE p.closed = true AND s.latest_year >= 2024");
+        }
+        _ => return Err(ServerFnError::new("Invalid report type")),
+    }
+
+    query_builder.push(" LIMIT 100");
+
+    let pubs = query_builder
+        .build_query_as::<PubSummary>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
