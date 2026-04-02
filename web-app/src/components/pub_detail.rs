@@ -259,17 +259,17 @@ pub fn PubDetail() -> impl IntoView {
                                                             <div class="pub-photos-grid">
                                                                 {p_list.into_iter().map(|p| view! {
                                                                     <div class="photo-item">
-                                                                        <a href=p.image_url.clone() target="_blank">
+                                                                        <a href=p.image_url.clone() target="_blank" rel="noopener noreferrer">
                                                                             <img src=p.image_url.clone() alt=p.owner_name.clone() style="max-width: 100%; border-radius: 8px;" />
                                                                         </a>
                                                                         <p class="attribution">
                                                                             "Photo: "
-                                                                            <a href=p.original_url.clone() target="_blank">
+                                                                            <a href=p.original_url.clone() target="_blank" rel="noopener noreferrer">
                                                                                 {if p.flickr_id.is_some() { "Flickr" } else { "Source" }}
                                                                             </a>
                                                                             " by " <strong>{p.owner_name.clone()}</strong>
                                                                             " ("
-                                                                            <a href=p.license_url.clone() target="_blank">{p.license_type.clone()}</a>
+                                                                            <a href=p.license_url.clone() target="_blank" rel="noopener noreferrer">{p.license_type.clone()}</a>
                                                                             ")"
                                                                         </p>
                                                                     </div>
@@ -286,28 +286,28 @@ pub fn PubDetail() -> impl IntoView {
                                             <h3>"Links"</h3>
                                             <ul>
                                                 {if let Some(id) = whatpub.clone() {
-                                                    view! { <li><a href=format!("https://camra.org.uk/pubs/{}", id) target="_blank">"WhatPub"</a></li> }.into_any()
+                                                    view! { <li><a href=format!("https://camra.org.uk/pubs/{}", id) target="_blank" rel="noopener noreferrer">"WhatPub"</a></li> }.into_any()
                                                 } else {
                                                     let search_url = format!("https://camra.org.uk/pubs/?pub_search={}+{}", name.replace(' ', "+"), postcode.replace(' ', "+"));
-                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on WhatPub"</a></li> }.into_any()
+                                                    view! { <li><a href=search_url target="_blank" rel="noopener noreferrer" class="search-fallback">"Search on WhatPub"</a></li> }.into_any()
                                                 }}
 
                                                 {if let Some(id) = gmaps.clone() {
-                                                    view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank">"Google Maps"</a></li> }.into_any()
+                                                    view! { <li><a href=format!("https://www.google.com/maps/place/?q=place_id:{}", id) target="_blank" rel="noopener noreferrer">"Google Maps"</a></li> }.into_any()
                                                 } else {
                                                     let search_url = format!("https://www.google.com/maps/search/{}+{}/", name.replace(' ', "+"), postcode.replace(' ', "+"));
-                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on Google Maps"</a></li> }.into_any()
+                                                    view! { <li><a href=search_url target="_blank" rel="noopener noreferrer" class="search-fallback">"Search on Google Maps"</a></li> }.into_any()
                                                 }}
 
                                                 {if let Some(id) = untappd.clone() {
                                                     view! {
                                                         <li>
-                                                            <a href=format!("https://untappd.com/venue/{}", id) target="_blank">"Untappd"</a>
+                                                            <a href=format!("https://untappd.com/venue/{}", id) target="_blank" rel="noopener noreferrer">"Untappd"</a>
                                                             {if untappd_verified {
                                                                 view! {
                                                                     <span class="verified-badge" title="Verified on Untappd">" ✓"</span>
                                                                     " ("
-                                                                    <a href=format!("https://untappd.com/venue/{}/menu", id) target="_blank" class="menu-link">"Menu"</a>
+                                                                    <a href=format!("https://untappd.com/venue/{}/menu", id) target="_blank" rel="noopener noreferrer" class="menu-link">"Menu"</a>
                                                                     ")"
                                                                 }.into_any()
                                                             } else {
@@ -317,7 +317,7 @@ pub fn PubDetail() -> impl IntoView {
                                                     }.into_any()
                                                 } else {
                                                     let search_url = format!("https://untappd.com/search?q={}+{}&type=venue&sort=", name.replace(' ', "+"), town.replace(' ', "+"));
-                                                    view! { <li><a href=search_url target="_blank" class="search-fallback">"Search on Untappd"</a></li> }.into_any()
+                                                    view! { <li><a href=search_url target="_blank" rel="noopener noreferrer" class="search-fallback">"Search on Untappd"</a></li> }.into_any()
                                                 }}
                                             </ul>
                                         </div>

@@ -69,21 +69,23 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
     let on_submit = move |ev: leptos::web_sys::SubmitEvent| {
         ev.prevent_default();
         update_action.dispatch(UpdatePub {
-            id: pub_data.id,
-            name: name.get(),
-            address: address.get(),
-            town: town.get(),
-            region: region.get(),
-            country_code: pub_data.country_code.clone(),
-            postcode: postcode.get(),
-            closed: closed.get(),
-            lat: lat.get(),
-            lon: lon.get(),
-            untappd_id: untappd_id.get(),
-            google_maps_id: google_maps_id.get(),
-            whatpub_id: whatpub_id.get(),
-            rgl_id: rgl_id.get(),
-            years: years.get(),
+            req: crate::models::UpdatePubRequest {
+                id: pub_data.id,
+                name: name.get(),
+                address: address.get(),
+                town: town.get(),
+                region: region.get(),
+                country_code: pub_data.country_code.clone(),
+                postcode: postcode.get(),
+                closed: closed.get(),
+                lat: lat.get(),
+                lon: lon.get(),
+                untappd_id: untappd_id.get(),
+                google_maps_id: google_maps_id.get(),
+                whatpub_id: whatpub_id.get(),
+                rgl_id: rgl_id.get(),
+                years: years.get(),
+            },
         });
 
         if !photo_image_url.get().is_empty() && photo_is_cc.get() {

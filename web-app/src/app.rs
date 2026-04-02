@@ -84,12 +84,8 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <Meta name="googlebot" content="noindex, nofollow, noarchive, noai, noimageai"/>
                 <Meta name="bingbot" content="noindex, nofollow, noarchive, noai, noimageai"/>
                 <link rel="manifest" href="/assets/manifest.json"/>
-                <script>
-                    "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/assets/sw.js'); }); }"
-                </script>
-                <script>
-                    "try { let t = localStorage.getItem('theme'); if (t && t !== 'system') document.documentElement.setAttribute('data-theme', t); } catch (e) {}"
-                </script>
+                <script src="/assets/service-worker-reg.js" defer></script>
+                <script src="/assets/theme-init.js"></script>
                 <Stylesheet id="leptos" href="/pkg/web-app.css"/>
                 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
                 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -187,16 +183,16 @@ fn RouterContent() -> impl IntoView {
                 <Route path=path!("/pub/:id") view=PubDetail/>
 
                 <Route path=path!("/explore") view=ExplorerHome/>
-                <Route path=path!("/explore/:region") view=RegionDashboard/>
                 <Route path=path!("/explore/:region/all") view=LocationPubList/>
                 <Route path=path!("/explore/:region/town/:town") view=LocationPubList/>
                 <Route path=path!("/explore/:region/outcode/:outcode") view=LocationPubList/>
+                <Route path=path!("/explore/:region") view=RegionDashboard/>
 
                 <Route path=path!("/explore/year/:year") view=YearDashboard/>
-                <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
                 <Route path=path!("/explore/year/:year/:region/all") view=LocationPubList/>
                 <Route path=path!("/explore/year/:year/:region/town/:town") view=LocationPubList/>
                 <Route path=path!("/explore/year/:year/:region/outcode/:outcode") view=LocationPubList/>
+                <Route path=path!("/explore/year/:year/:region") view=RegionDashboard/>
             </Routes>
             <footer>
                 <p>"Note: Pub locations are determined via automated geocoding and may not be 100% accurate. Distance calculations are estimates."</p>

@@ -51,7 +51,7 @@ pub mod ssr_export {
     }
 
     pub async fn get_export_data(pool: &PgPool, filter: &ExportFilter) -> Result<Vec<PubDetail>> {
-        let mut query = String::from(
+        let mut query_builder = sqlx::QueryBuilder::new(
             r#"SELECT p.id, p.name, 
                       COALESCE(p.address, '') as address, 
                       COALESCE(p.town, '') as town, 
@@ -74,30 +74,31 @@ pub mod ssr_export {
         );
 
         if filter.year.is_some() {
-            query.push_str(" JOIN gbg_history h ON p.id = h.pub_id");
+            query_builder.push(" JOIN gbg_history h ON p.id = h.pub_id");
         }
 
-        query.push_str(" WHERE 1=1");
+        query_builder.push(" WHERE 1=1");
 
         if let Some(ref r) = filter.region {
-            query.push_str(&format!(" AND p.region = '{}'", r.replace("'", "''")));
+            query_builder.push(" AND p.region = ");
+            query_builder.push_bind(r);
         }
         if let Some(ref t) = filter.town {
-            query.push_str(&format!(" AND p.town = '{}'", t.replace("'", "''")));
+            query_builder.push(" AND p.town = ");
+            query_builder.push_bind(t);
         }
         if let Some(ref o) = filter.outcode {
-            query.push_str(&format!(
-                " AND SPLIT_PART(p.postcode, ' ', 1) = '{}'",
-                o.replace("'", "''")
-            ));
+            query_builder.push(" AND SPLIT_PART(p.postcode, ' ', 1) = ");
+            query_builder.push_bind(o);
         }
         if let Some(y) = filter.year {
-            query.push_str(&format!(" AND h.year = {}", y));
+            query_builder.push(" AND h.year = ");
+            query_builder.push_bind(y);
         }
 
-        query.push_str(" ORDER BY p.name");
+        query_builder.push(" ORDER BY p.name");
 
-        let rows = sqlx::query(&query).fetch_all(pool).await?;
+        let rows = query_builder.build().fetch_all(pool).await?;
 
         let pubs = rows
             .into_iter()

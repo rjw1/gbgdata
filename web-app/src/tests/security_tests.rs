@@ -92,11 +92,6 @@ async fn test_hsts_present_in_prod() {
         .await
         .unwrap();
 
-    assert!(response
-        .headers()
-        .get(header::STRICT_TRANSPORT_SECURITY)
-        .is_some());
-
     assert_eq!(
         response
             .headers()

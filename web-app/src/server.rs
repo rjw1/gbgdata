@@ -254,21 +254,73 @@ pub async fn get_region_details(
     })
 }
 
-#[server(GetPubsByLocation, "/api")]
-pub async fn get_pubs_by_location(
+#[cfg(feature = "ssr")]
+pub fn apply_security_headers<S>(router: axum::Router<S>, is_prod: bool) -> axum::Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::http::{header, HeaderValue};
+    use tower_http::set_header::SetResponseHeaderLayer;
+
+    let router = router
+        .layer(SetResponseHeaderLayer::overriding(
+            header::HeaderName::from_static("x-robots-tag"),
+            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ));
+
+    if is_prod {
+        router.layer(SetResponseHeaderLayer::overriding(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+    } else {
+        router
+    }
+}
+
+#[cfg(feature = "ssr")]
+pub async fn admin_auth_middleware(
+    session: tower_sessions::Session,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> impl axum::response::IntoResponse {
+    use crate::auth::User;
+    use axum::response::IntoResponse;
+
+    let path = request.uri().path();
+    if path.starts_with("/admin") {
+        let user: Option<User> = session.get("user").await.ok().flatten();
+        match user {
+            Some(u) if u.role == "admin" || u.role == "owner" => next.run(request).await,
+            _ => axum::response::Redirect::temporary("/login").into_response(),
+        }
+    } else {
+        next.run(request).await
+    }
+}
+
+#[cfg(feature = "ssr")]
+pub async fn get_pubs_by_location_db(
+    pool: &sqlx::PgPool,
     region: String,
     town: Option<String>,
     outcode: Option<String>,
     year: Option<i32>,
     sort: Option<SortMode>,
     open_only: Option<bool>,
-) -> Result<Vec<PubSummary>, ServerFnError> {
-    use leptos::context::use_context;
-    use sqlx::PgPool;
-
-    let pool =
-        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
-
+) -> Result<Vec<PubSummary>, sqlx::Error> {
     let mut query = String::from(
         r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
@@ -295,23 +347,20 @@ pub async fn get_pubs_by_location(
 
     query.push_str(" WHERE p.region = $1");
 
-    let mut binds: Vec<String> = vec![region];
     let mut param_idx = 2;
 
-    if let Some(t) = town {
+    if town.is_some() {
         query.push_str(&format!(" AND p.town = ${}", param_idx));
-        binds.push(t);
         param_idx += 1;
-    } else if let Some(o) = outcode {
+    } else if outcode.is_some() {
         query.push_str(&format!(
             " AND SPLIT_PART(p.postcode, ' ', 1) = ${}",
             param_idx
         ));
-        binds.push(o);
         param_idx += 1;
     }
 
-    if let Some(_y) = year {
+    if year.is_some() {
         query.push_str(&format!(" AND h.year = ${}", param_idx));
     }
 
@@ -321,39 +370,45 @@ pub async fn get_pubs_by_location(
 
     query.push_str(&format!(" {}", get_order_by(sort, "p.name")));
 
-    // Handle types properly - since year is i32, we need a custom query builder or fixed variants
-    let pubs = if let Some(y) = year {
-        if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(&binds[1])
-                .bind(y)
-                .fetch_all(&pool)
-                .await
-        } else {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(y)
-                .fetch_all(&pool)
-                .await
-        }
-    } else {
-        if binds.len() == 2 {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .bind(&binds[1])
-                .fetch_all(&pool)
-                .await
-        } else {
-            sqlx::query_as::<_, PubSummary>(&query)
-                .bind(&binds[0])
-                .fetch_all(&pool)
-                .await
-        }
-    }
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let mut q = sqlx::query_as::<_, PubSummary>(&query).bind(&region);
 
-    Ok(pubs)
+    if let Some(t) = town {
+        q = q.bind(t);
+    } else if let Some(o) = outcode {
+        q = q.bind(o);
+    }
+
+    if let Some(y) = year {
+        q = q.bind(y);
+    }
+
+    q.fetch_all(pool).await
+}
+
+#[server(GetPubsByLocation, "/api")]
+pub async fn get_pubs_by_location(
+    region: String,
+    town: Option<String>,
+    outcode: Option<String>,
+    year: Option<i32>,
+    sort: Option<SortMode>,
+    open_only: Option<bool>,
+) -> Result<Vec<PubSummary>, ServerFnError> {
+    use leptos::context::use_context;
+    use sqlx::PgPool;
+
+    #[cfg(feature = "ssr")]
+    tracing::debug!(
+        "GetPubsByLocation: region={}, town={:?}, outcode={:?}, year={:?}, sort={:?}, open_only={:?}",
+        region, town, outcode, year, sort, open_only
+    );
+
+    let pool =
+        use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
+
+    get_pubs_by_location_db(&pool, region, town, outcode, year, sort, open_only)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 #[server(GetPubs, "/api")]
@@ -368,13 +423,7 @@ pub async fn get_pubs(
     let pool =
         use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let open_filter = if open_only.unwrap_or(false) {
-        "AND p.closed = false"
-    } else {
-        ""
-    };
-
-    let pubs = sqlx::query_as::<_, PubSummary>(&format!(
+    let mut query_builder = sqlx::QueryBuilder::new(
         r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.region, '') as region, 
@@ -392,16 +441,30 @@ pub async fn get_pubs(
                   p.untappd_id
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE (p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1)
-           {}
-           {} LIMIT 50"#,
-        open_filter,
-        get_order_by(sort, "p.name")
-    ))
-    .bind(format!("%{}%", query))
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+           WHERE (p.name ILIKE "#,
+    );
+
+    let search_pattern = format!("%{}%", query);
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(" OR p.town ILIKE ");
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(" OR p.region ILIKE ");
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(")");
+
+    if open_only.unwrap_or(false) {
+        query_builder.push(" AND p.closed = false");
+    }
+
+    query_builder.push(" ");
+    query_builder.push(get_order_by(sort, "p.name"));
+    query_builder.push(" LIMIT 50");
+
+    let pubs = query_builder
+        .build_query_as::<PubSummary>()
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(pubs)
 }
@@ -637,24 +700,24 @@ pub async fn get_pub_detail(id: Uuid) -> Result<PubDetail, ServerFnError> {
 }
 
 #[server(UpdatePub, "/api")]
-#[allow(clippy::too_many_arguments)]
-pub async fn update_pub(
-    id: Uuid,
-    name: String,
-    address: String,
-    town: String,
-    region: String,
-    country_code: Option<String>,
-    postcode: String,
-    closed: bool,
-    lat: Option<f64>,
-    lon: Option<f64>,
-    untappd_id: Option<String>,
-    google_maps_id: Option<String>,
-    whatpub_id: Option<String>,
-    rgl_id: Option<String>,
-    years: Vec<i32>,
-) -> Result<(), ServerFnError> {
+pub async fn update_pub(req: crate::models::UpdatePubRequest) -> Result<(), ServerFnError> {
+    let crate::models::UpdatePubRequest {
+        id,
+        name,
+        address,
+        town,
+        region,
+        country_code,
+        postcode,
+        closed,
+        lat,
+        lon,
+        untappd_id,
+        google_maps_id,
+        whatpub_id,
+        rgl_id,
+        years,
+    } = req;
     use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
@@ -1517,55 +1580,48 @@ pub async fn bulk_update_pubs(
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let mut query = String::from("UPDATE pubs SET id = id"); // No-op to start
-    let mut param_idx = 1;
-    let mut binds = Vec::new();
+    let mut query_builder = sqlx::QueryBuilder::new("UPDATE pubs SET ");
+    let mut updates = false;
 
     if let Some(c) = closed {
-        query.push_str(&format!(", closed = ${}", param_idx));
-        param_idx += 1;
-        binds.push(c.to_string());
+        query_builder.push("closed = ");
+        query_builder.push_bind(c);
+        updates = true;
     }
+
     if let Some(v) = untappd_verified {
-        query.push_str(&format!(", untappd_verified = ${}", param_idx));
-        param_idx += 1;
-        binds.push(v.to_string());
+        if updates {
+            query_builder.push(", ");
+        }
+        query_builder.push("untappd_verified = ");
+        query_builder.push_bind(v);
+        updates = true;
     }
 
-    query.push_str(" WHERE 1=1");
-
-    if let Some(ref r) = region {
-        query.push_str(&format!(" AND region = ${}", param_idx));
-        param_idx += 1;
-        binds.push(r.clone());
-    }
-    if let Some(ref t) = town {
-        query.push_str(&format!(" AND town = ${}", param_idx));
-        param_idx += 1;
-        binds.push(t.clone());
-    }
-    if let Some(ref o) = outcode {
-        query.push_str(&format!(
-            " AND SPLIT_PART(postcode, ' ', 1) = ${}",
-            param_idx
-        ));
-        binds.push(o.clone());
+    if !updates {
+        return Ok(0);
     }
 
-    // This is a bit tricky with sqlx because of dynamic number of binds and types.
-    // For now, we just implement a simplified version or use a macro if possible.
-    // Given the constraints, I'll use a direct query for simple cases.
+    query_builder.push(" WHERE 1=1");
 
-    // ... bind manually based on what we added ...
-    // Since this is complex to do generically in sqlx without a lot of boilerplate,
-    // I'll stick to a more restricted but safe implementation if needed.
+    if let Some(r) = region {
+        query_builder.push(" AND region = ");
+        query_builder.push_bind(r);
+    }
+    if let Some(t) = town {
+        query_builder.push(" AND town = ");
+        query_builder.push_bind(t);
+    }
+    if let Some(o) = outcode {
+        query_builder.push(" AND SPLIT_PART(postcode, ' ', 1) = ");
+        query_builder.push_bind(o);
+    }
 
-    let res = sqlx::query::<sqlx::Postgres>("UPDATE pubs SET closed = COALESCE($1, closed), untappd_verified = COALESCE($2, untappd_verified) 
-                           WHERE (region = $3 OR $3 IS NULL) 
-                             AND (town = $4 OR $4 IS NULL) 
-                             AND (SPLIT_PART(postcode, ' ', 1) = $5 OR $5 IS NULL)")
-        .bind(closed).bind(untappd_verified).bind(region).bind(town).bind(outcode)
-        .execute(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let res = query_builder
+        .build()
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     sqlx::query!(
         "INSERT INTO audit_log (user_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4)",
@@ -1840,11 +1896,9 @@ pub async fn register_user(
     username: String,
     password: String,
 ) -> Result<bool, ServerFnError> {
-    use crate::auth::{session, User};
-    use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+    use crate::auth::{hash_password, session, User};
     use leptos::context::use_context;
     use leptos_axum::extract;
-    use rand::rngs::OsRng;
     use sqlx::PgPool;
     use tower_sessions::Session;
 
@@ -1865,12 +1919,7 @@ pub async fn register_user(
     };
 
     // 2. Hash password
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .to_string();
+    let password_hash = hash_password(&password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // 3. Create user
     let mut totp_secret = vec![0u8; 20];
@@ -1943,7 +1992,7 @@ pub async fn get_audit_logs(
 
     let limit = limit.clamp(1, 500); // Cap at 500
 
-    let mut query = String::from(
+    let mut query_builder = sqlx::QueryBuilder::new(
         r#"SELECT l.id, u.username, l.action, l.entity_type, l.entity_id, l.timestamp
            FROM audit_log l
            JOIN users u ON l.user_id = u.id
@@ -1951,12 +2000,21 @@ pub async fn get_audit_logs(
     );
 
     if !search.is_empty() {
-        query.push_str(&format!(" AND (u.username ILIKE '%{0}%' OR l.action ILIKE '%{0}%' OR l.entity_type ILIKE '%{0}%')", search.replace("'", "''")));
+        let search_pattern = format!("%{}%", search);
+        query_builder.push(" AND (u.username ILIKE ");
+        query_builder.push_bind(search_pattern.clone());
+        query_builder.push(" OR l.action ILIKE ");
+        query_builder.push_bind(search_pattern.clone());
+        query_builder.push(" OR l.entity_type ILIKE ");
+        query_builder.push_bind(search_pattern);
+        query_builder.push(")");
     }
 
-    query.push_str(&format!(" ORDER BY l.timestamp DESC LIMIT {}", limit));
+    query_builder.push(" ORDER BY l.timestamp DESC LIMIT ");
+    query_builder.push_bind(limit);
 
-    let logs = sqlx::query_as::<sqlx::Postgres, AuditLogEntry>(&query)
+    let logs = query_builder
+        .build_query_as::<AuditLogEntry>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -2230,14 +2288,45 @@ pub async fn get_missing_data_reports(
         return Err(ServerFnError::new("Unauthorized: Admin role required"));
     }
 
-    let query = match report_type.as_str() {
-        "coords" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, NULL::float8 as lat, NULL::float8 as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.location IS NULL LIMIT 100",
-        "ids" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p LEFT JOIN pub_stats s ON p.id = s.pub_id WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL LIMIT 100",
-        "closed" => "SELECT p.id, p.name, p.town, p.region, p.country_code, p.postcode, p.closed, NULL::float8 as distance_meters, CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, s.latest_year, s.total_years as total_years_rank, s.current_streak, p.whatpub_id, p.google_maps_id, p.untappd_id FROM pubs p JOIN pub_stats s ON p.id = s.pub_id WHERE p.closed = true AND s.latest_year >= 2024 LIMIT 100",
-        _ => return Err(ServerFnError::new("Invalid report type")),
-    };
+    let mut query_builder = sqlx::QueryBuilder::new(
+        r#"SELECT p.id, p.name, 
+                  COALESCE(p.town, '') as town, 
+                  COALESCE(p.region, '') as region, 
+                  p.country_code,
+                  COALESCE(p.postcode, '') as postcode, 
+                  COALESCE(p.closed, false) as closed,
+                  NULL::float8 as distance_meters,
+                  CASE WHEN p.location IS NOT NULL THEN ST_Y(p.location::geometry) ELSE NULL END as lat, 
+                  CASE WHEN p.location IS NOT NULL THEN ST_X(p.location::geometry) ELSE NULL END as lon, 
+                  s.latest_year, 
+                  s.total_years as total_years_rank, 
+                  s.current_streak, 
+                  p.whatpub_id, 
+                  p.google_maps_id, 
+                  p.untappd_id 
+           FROM pubs p 
+           LEFT JOIN pub_stats s ON p.id = s.pub_id "#,
+    );
 
-    let pubs = sqlx::query_as::<sqlx::Postgres, PubSummary>(query)
+    match report_type.as_str() {
+        "coords" => {
+            query_builder.push("WHERE p.location IS NULL");
+        }
+        "ids" => {
+            query_builder.push(
+                "WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL",
+            );
+        }
+        "closed" => {
+            query_builder.push("WHERE p.closed = true AND s.latest_year >= 2024");
+        }
+        _ => return Err(ServerFnError::new("Invalid report type")),
+    }
+
+    query_builder.push(" LIMIT 100");
+
+    let pubs = query_builder
+        .build_query_as::<PubSummary>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -2294,19 +2383,19 @@ pub async fn get_users(
         return Err(ServerFnError::new("Unauthorized"));
     }
 
-    let mut query = String::from("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
+    let mut query_builder = sqlx::QueryBuilder::new("SELECT id, username, role, totp_setup_completed, last_login, created_at FROM users WHERE 1=1");
     if !search.is_empty() {
-        query.push_str(&format!(
-            " AND username ILIKE '%{}%'",
-            search.replace("'", "''")
-        ));
+        query_builder.push(" AND username ILIKE ");
+        query_builder.push_bind(format!("%{}%", search));
     }
     if role_filter != "all" {
-        query.push_str(&format!(" AND role = '{}'", role_filter.replace("'", "''")));
+        query_builder.push(" AND role = ");
+        query_builder.push_bind(role_filter);
     }
-    query.push_str(" ORDER BY username ASC");
+    query_builder.push(" ORDER BY username ASC");
 
-    let users = sqlx::query_as::<sqlx::Postgres, UserManagementEntry>(&query)
+    let users = query_builder
+        .build_query_as::<UserManagementEntry>()
         .fetch_all(&pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;

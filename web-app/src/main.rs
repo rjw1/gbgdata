@@ -23,20 +23,28 @@ async fn favicon_ico() -> impl IntoResponse {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
-    use axum::http::{header, HeaderValue};
     use axum::routing::get;
     use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use sqlx::postgres::PgPoolOptions;
     use tower_http::services::ServeDir;
-    use tower_http::set_header::SetResponseHeaderLayer;
     use tower_sessions::{Expiry, SessionManagerLayer};
     use tower_sessions_sqlx_store::PostgresStore;
     use web_app::app::*;
     use web_app::export::*;
 
     dotenvy::dotenv().ok();
+
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    let _ = tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,web_app=info")),
+        )
+        .try_init();
+
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -57,8 +65,13 @@ async fn main() {
         .await
         .expect("Failed to migrate session store");
 
+    let leptos_env = std::env::var("LEPTOS_ENV")
+        .map(|v| v.to_lowercase())
+        .unwrap_or_default();
+    let is_prod = leptos_env == "prod" || leptos_env == "production";
+
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false) // Set to true in production with HTTPS
+        .with_secure(is_prod)
         .with_expiry(Expiry::OnInactivity(
             tower_sessions::cookie::time::Duration::days(7),
         ));
@@ -107,38 +120,16 @@ async fn main() {
                 let leptos_options = leptos_options.clone();
                 move || shell(leptos_options.clone())
             },
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_FRAME_OPTIONS,
-            HeaderValue::from_static("DENY"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::X_CONTENT_TYPE_OPTIONS,
-            HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::REFERRER_POLICY,
-            HeaderValue::from_static("strict-origin-when-cross-origin"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self'; script-src 'self' unpkg.com; style-src 'self' 'unsafe-inline' unpkg.com; img-src 'self' data: *.tile.openstreetmap.org unpkg.com;"),
         ));
 
-    let app = if std::env::var("LEPTOS_ENV").unwrap_or_default() == "production" {
-        app.layer(SetResponseHeaderLayer::overriding(
-            header::STRICT_TRANSPORT_SECURITY,
-            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
-        ))
-    } else {
-        app
-    };
+    let app = web_app::server::apply_security_headers(app, is_prod);
 
-    let app = app.layer(session_layer).with_state(state);
+    let app = app
+        .layer(axum::middleware::from_fn(
+            web_app::server::admin_auth_middleware,
+        ))
+        .layer(session_layer)
+        .with_state(state);
 
     // run our app with hyper
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
