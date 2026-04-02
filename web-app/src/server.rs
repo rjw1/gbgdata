@@ -263,7 +263,7 @@ where
     use tower_http::set_header::SetResponseHeaderLayer;
 
     let csp = if is_prod {
-        "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org;"
+        "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org;"
     } else {
         "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://*.tile.openstreetmap.org ws:;"
     };
@@ -412,13 +412,7 @@ pub async fn get_pubs(
     let pool =
         use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found in context"))?;
 
-    let open_filter = if open_only.unwrap_or(false) {
-        "AND p.closed = false"
-    } else {
-        ""
-    };
-
-    let pubs = sqlx::query_as::<_, PubSummary>(&format!(
+    let mut query_builder = sqlx::QueryBuilder::new(
         r#"SELECT p.id, p.name, 
                   COALESCE(p.town, '') as town, 
                   COALESCE(p.region, '') as region, 
@@ -436,16 +430,30 @@ pub async fn get_pubs(
                   p.untappd_id
            FROM pubs p
            LEFT JOIN pub_stats s ON p.id = s.pub_id
-           WHERE (p.name ILIKE $1 OR p.town ILIKE $1 OR p.region ILIKE $1)
-           {}
-           {} LIMIT 50"#,
-        open_filter,
-        get_order_by(sort, "p.name")
-    ))
-    .bind(format!("%{}%", query))
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+           WHERE (p.name ILIKE "#,
+    );
+
+    let search_pattern = format!("%{}%", query);
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(" OR p.town ILIKE ");
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(" OR p.region ILIKE ");
+    query_builder.push_bind(&search_pattern);
+    query_builder.push(")");
+
+    if open_only.unwrap_or(false) {
+        query_builder.push(" AND p.closed = false");
+    }
+
+    query_builder.push(" ");
+    query_builder.push(get_order_by(sort, "p.name"));
+    query_builder.push(" LIMIT 50");
+
+    let pubs = query_builder
+        .build_query_as::<PubSummary>()
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     Ok(pubs)
 }

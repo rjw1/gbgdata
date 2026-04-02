@@ -84,12 +84,8 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <Meta name="googlebot" content="noindex, nofollow, noarchive, noai, noimageai"/>
                 <Meta name="bingbot" content="noindex, nofollow, noarchive, noai, noimageai"/>
                 <link rel="manifest" href="/assets/manifest.json"/>
-                <script>
-                    "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/assets/sw.js'); }); }"
-                </script>
-                <script>
-                    "try { let t = localStorage.getItem('theme'); if (t && t !== 'system') document.documentElement.setAttribute('data-theme', t); } catch (e) {}"
-                </script>
+                <script src="/assets/service-worker-reg.js" defer></script>
+                <script src="/assets/theme-init.js"></script>
                 <Stylesheet id="leptos" href="/pkg/web-app.css"/>
                 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
                 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -116,6 +112,20 @@ fn RouterContent() -> impl IntoView {
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
     let navigate = leptos_router::hooks::use_navigate();
     let location = leptos_router::hooks::use_location();
+
+    let nav = navigate.clone();
+    let loc = location.clone();
+    Effect::new(move |_| {
+        let path = loc.pathname.get();
+        if path == "/admin" {
+            if let Some(Ok(user_opt)) = user.get() {
+                match user_opt {
+                    Some(u) if u.role == "admin" || u.role == "owner" => {}
+                    _ => nav("/login", Default::default()),
+                }
+            }
+        }
+    });
 
     Effect::new(move |_| {
         if let Some(Ok(Some(u))) = user.get() {
