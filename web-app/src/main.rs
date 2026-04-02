@@ -39,7 +39,10 @@ async fn main() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
     let _ = tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,web_app=info")))
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,web_app=info")),
+        )
         .try_init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

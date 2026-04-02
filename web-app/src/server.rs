@@ -262,35 +262,7 @@ where
     use axum::http::{header, HeaderValue};
     use tower_http::set_header::SetResponseHeaderLayer;
 
-    let csp = if is_prod {
-        "default-src 'self'; \
-         script-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js; \
-         style-src 'self' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css; \
-         img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/dist/images/; \
-         connect-src 'self' https://nominatim.openstreetmap.org; \
-         font-src 'self'; \
-         object-src 'none'; \
-         frame-ancestors 'none'; \
-         form-action 'self'; \
-         base-uri 'self';"
-    } else {
-        "default-src 'self'; \
-         script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com/leaflet@1.9.4/dist/leaflet.js; \
-         style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/dist/leaflet.css; \
-         img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/dist/images/; \
-         connect-src 'self' ws: http: https:; \
-         font-src 'self'; \
-         object-src 'none'; \
-         frame-ancestors 'none'; \
-         form-action 'self'; \
-         base-uri 'self';"
-    };
-
     let router = router
-        .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("content-security-policy"),
-            HeaderValue::from_static(csp),
-        ))
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("x-robots-tag"),
             HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
@@ -2320,7 +2292,9 @@ pub async fn get_missing_data_reports(
             query_builder.push("WHERE p.location IS NULL");
         }
         "ids" => {
-            query_builder.push("WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL");
+            query_builder.push(
+                "WHERE p.whatpub_id IS NULL OR p.google_maps_id IS NULL OR p.untappd_id IS NULL",
+            );
         }
         "closed" => {
             query_builder.push("WHERE p.closed = true AND s.latest_year >= 2024");

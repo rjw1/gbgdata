@@ -36,13 +36,17 @@ async fn test_security_headers_present() {
         "nosniff"
     );
     assert_eq!(
-        response.headers().get(header::X_FRAME_OPTIONS).and_then(|h| h.to_str().ok()).unwrap(),
+        response
+            .headers()
+            .get(header::X_FRAME_OPTIONS)
+            .and_then(|h| h.to_str().ok())
+            .unwrap(),
         "DENY"
     );
-    }
+}
 
-    #[tokio::test]
-    async fn test_hsts_absent_by_default() {
+#[tokio::test]
+async fn test_hsts_absent_by_default() {
     let app = Router::new().route("/", get(|| async { "ok" }));
     let app = apply_security_headers(app, false);
 
@@ -60,10 +64,10 @@ async fn test_security_headers_present() {
         .headers()
         .get(header::STRICT_TRANSPORT_SECURITY)
         .is_none());
-    }
+}
 
-    #[tokio::test]
-    async fn test_hsts_present_in_prod() {
+#[tokio::test]
+async fn test_hsts_present_in_prod() {
     let app = Router::new().route("/", get(|| async { "ok" }));
     let app = apply_security_headers(app, true);
 
@@ -90,4 +94,4 @@ async fn test_security_headers_present() {
             .unwrap(),
         "max-age=31536000; includeSubDomains"
     );
-    }
+}
