@@ -198,3 +198,22 @@ pub struct UserManagementEntry {
     pub last_login: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdatePubRequest {
+    pub id: Uuid,
+    pub name: String,
+    pub address: String,
+    pub town: String,
+    pub region: String,
+    pub country_code: Option<String>,
+    pub postcode: String,
+    pub closed: bool,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub untappd_id: Option<String>,
+    pub google_maps_id: Option<String>,
+    pub whatpub_id: Option<String>,
+    pub rgl_id: Option<String>,
+    pub years: Vec<i32>,
+}

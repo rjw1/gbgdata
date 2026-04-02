@@ -24,10 +24,10 @@ impl Default for Geocoder {
 
 impl Geocoder {
     pub fn new() -> Self {
-        let client = Client::builder()
-            .user_agent("gbgdata-importer (bob@example.com)")
-            .build()
-            .unwrap();
+        let user_agent = std::env::var("NOMINATIM_USER_AGENT")
+            .unwrap_or_else(|_| "gbgdata-importer (https://github.com/rjw1/gbgdata)".to_string());
+
+        let client = Client::builder().user_agent(&user_agent).build().unwrap();
 
         let url = std::env::var("NOMINATIM_URL").unwrap_or_default();
         let is_local = url.contains("localhost") || url.contains("127.0.0.1");
