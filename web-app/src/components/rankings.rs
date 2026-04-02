@@ -38,7 +38,15 @@ pub fn Rankings() -> impl IntoView {
             <div class="pub-grid">
                 <Suspense fallback=|| view! { <p>"Loading rankings..."</p> }>
                     {move || pubs.get().map(|res| match res {
-                        Ok(list) => list.into_iter().enumerate().map(|(idx, p)| {
+                        Ok(list) => list.into_iter().map(|p| {
+                            let rank_val = match sort.get() {
+                                SortMode::Streak => p.streak_rank,
+                                _ => p.entries_rank,
+                            };
+                            let rank_display = match rank_val {
+                                Some(r) if r > 0 => format!("#{}", r),
+                                _ => "#—".to_string(),
+                            };
                             let id = p.id;
                             let name = p.name.clone();
                             let town = p.town.clone();
@@ -49,13 +57,13 @@ pub fn Rankings() -> impl IntoView {
 
                             view! {
                                 <A href=format!("/pub/{}", id) attr:class="pub-card ranking-card">
-                                    <div class="ranking-number">{format!("#{}", idx + 1)}</div>
+                                    <div class="ranking-number">{rank_display}</div>
                                     <div class="ranking-content">
                                         <h3>{name}</h3>
                                         <p>{format!("{}, {}", town, region)}</p>
 
                                         <div class="card-stats">
-                                            <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
+                                            <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries || sort.get() == SortMode::Name { "highlight" } else { "" })>
                                                 <span class="count">{total}</span>
                                                 <span class="label">" entries"</span>
                                             </div>

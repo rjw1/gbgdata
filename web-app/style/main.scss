@@ -561,6 +561,14 @@ a {
     text-transform: uppercase;
     letter-spacing: 1px;
   }
+
+  .rank-label {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--amber);
+    margin-top: 0.25rem;
+  }
 }
 
 .stat-ring-container {
@@ -573,6 +581,13 @@ a {
     font-weight: bold;
     color: #888;
   }
+}
+
+.stat-item .rank-inline {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--amber);
+  margin-left: 0.5rem;
 }
 
 .breadcrumbs {

@@ -118,3 +118,118 @@ async fn test_pub_stats_ignores_1972_trial_year(pool: PgPool) {
     assert_eq!(total, 2, "Should exclude 1972 from count");
     assert_eq!(first, 1973, "First year should be 1973, ignoring 1972");
 }
+
+#[sqlx::test(migrations = "../migrations")]
+async fn test_ranking_competition_sql(pool: PgPool) {
+    // 1. Seed pubs
+    for i in 1..=4 {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO pubs (id, name, region, town, postcode) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(format!("Pub {}", i))
+        .bind("Test Region")
+        .bind("Test Town")
+        .bind(format!("TS1 1A{}", i))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Pub 1 & 2: 3 years (Rank 1)
+        // Pub 3: 2 years (Rank 3)
+        // Pub 4: 1 year (Rank 4)
+        let years = if i <= 2 {
+            vec![2024, 2025, 2026]
+        } else if i == 3 {
+            vec![2025, 2026]
+        } else {
+            vec![2026]
+        };
+        for year in years {
+            sqlx::query("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)")
+                .bind(id)
+                .bind(year)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+    }
+
+    // Refresh view
+    sqlx::query("REFRESH MATERIALIZED VIEW pub_stats")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Assertions for Entry Rank (Competition 1224)
+    let ranks: Vec<(String, i64, i64)> = sqlx::query_as::<_, (String, i64, i64)>(
+        "SELECT p.name, s.total_years, s.entries_rank FROM pubs p JOIN pub_stats s ON p.id = s.pub_id ORDER BY s.entries_rank ASC, p.name ASC"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(ranks[0].2, 1, "Pub 1 should be Rank 1");
+    assert_eq!(ranks[1].2, 1, "Pub 2 should be Rank 1 (Tie)");
+    assert_eq!(ranks[2].2, 3, "Pub 3 should be Rank 3 (Skip 2)");
+    assert_eq!(ranks[3].2, 4, "Pub 4 should be Rank 4");
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn test_streak_ranking_competition_sql(pool: PgPool) {
+    // 1. Seed pubs
+    for i in 1..=4 {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO pubs (id, name, region, town, postcode) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(format!("Pub {}", i))
+        .bind("Test Region")
+        .bind("Test Town")
+        .bind(format!("TS1 1B{}", i))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Base year is 2026
+        // Pub 1 & 2: 3 year streak (2026, 2025, 2024) -> Rank 1
+        // Pub 3: 2 year streak (2026, 2025) -> Rank 3
+        // Pub 4: 1 year streak (2026) -> Rank 4
+        let years = if i <= 2 {
+            vec![2026, 2025, 2024]
+        } else if i == 3 {
+            vec![2026, 2025]
+        } else {
+            vec![2026]
+        };
+        for year in years {
+            sqlx::query("INSERT INTO gbg_history (pub_id, year) VALUES ($1, $2)")
+                .bind(id)
+                .bind(year)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+    }
+
+    // Refresh view
+    sqlx::query("REFRESH MATERIALIZED VIEW pub_stats")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Assertions for Streak Rank
+    let ranks: Vec<(String, i32, i64)> = sqlx::query_as::<_, (String, i32, i64)>(
+        "SELECT p.name, s.current_streak, s.streak_rank FROM pubs p JOIN pub_stats s ON p.id = s.pub_id ORDER BY s.streak_rank ASC, p.name ASC"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(ranks[0].2, 1, "Pub 1 should be Rank 1");
+    assert_eq!(ranks[1].2, 1, "Pub 2 should be Rank 1 (Tie)");
+    assert_eq!(ranks[2].2, 3, "Pub 3 should be Rank 3 (Skip 2)");
+    assert_eq!(ranks[3].2, 4, "Pub 4 should be Rank 4");
+}

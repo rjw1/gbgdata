@@ -13,18 +13,22 @@ fn test_csv_formatting_with_special_characters() {
         postcode: "SW1 1AA".to_string(),
         closed: false,
         years: vec![2024, 2023],
+        entries_rank: 12,
+        streak_rank: 5,
         ..Default::default()
     }];
     let csv = pub_list_to_csv(pub_data).unwrap();
     let csv_str = String::from_utf8(csv).unwrap();
 
     // Check headers
-    assert!(csv_str.contains("id,name,address,town,region,postcode,closed"));
+    assert!(csv_str.contains("id,name,address,town,region,postcode,closed,untappd_id,google_maps_id,whatpub_id,rgl_id,lat,lon,current_streak,streak_rank,last_5_years,last_10_years,total_years,entries_rank,first_year,latest_year,years"));
 
     // Check data row - CSV writer should handle quotes and commas
     assert!(csv_str.contains("\"The Dog & Duck, London\""));
     assert!(csv_str.contains("\"123 Main \"\"Street\"\"\""));
     assert!(csv_str.contains("2024;2023"));
+    assert!(csv_str.contains(",5,")); // streak_rank
+    assert!(csv_str.contains(",12,")); // entries_rank
 }
 
 #[test]

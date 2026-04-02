@@ -239,13 +239,15 @@ pub fn NearMe() -> impl IntoView {
                                                 <span class="label">" away"</span>
                                             </div>
                                         })}
-                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
+                                        <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries || sort.get() == SortMode::Name { "highlight" } else { "" })>
                                             <span class="count">{total}</span>
                                             <span class="label">" entries"</span>
+                                            {p.entries_rank.map(|r| view! { <span class="rank">{format!("#{}", r)}</span> }).into_any()}
                                         </div>
                                         <div class=format!("stat-badge {}", if sort.get() == SortMode::Streak { "highlight" } else { "" })>
                                             <span class="count">{streak}</span>
                                             <span class="label">" streak"</span>
+                                            {p.streak_rank.map(|r| view! { <span class="rank">{format!("#{}", r)}</span> }).into_any()}
                                         </div>
                                     </div>
                                 </A>
