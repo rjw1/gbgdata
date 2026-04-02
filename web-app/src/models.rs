@@ -221,3 +221,14 @@ pub struct UpdatePubRequest {
     pub rgl_id: Option<String>,
     pub years: Vec<i32>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SiteSettings {
+    pub private_mode: bool,
+    pub is_hard_locked: bool, // Reflects the ENV override
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateSiteSettingsRequest {
+    pub private_mode: bool,
+}
