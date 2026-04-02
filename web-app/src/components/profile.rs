@@ -1,11 +1,13 @@
+use crate::server::{
+    get_current_user, get_my_passkeys, FinishPasskeyRegistration, StartPasskeyRegistration,
+};
 use leptos::prelude::*;
-use crate::server::{get_current_user, get_my_passkeys, StartPasskeyRegistration, FinishPasskeyRegistration};
 
 #[component]
 pub fn Profile() -> impl IntoView {
     let user = Resource::new(|| (), |_| get_current_user());
     let passkeys = Resource::new(|| (), |_| get_my_passkeys());
-    
+
     let delete_action = ServerAction::<crate::server::DeletePasskey>::new();
     let start_reg_action = ServerAction::<StartPasskeyRegistration>::new();
     let finish_reg_action = ServerAction::<FinishPasskeyRegistration>::new();
@@ -18,13 +20,11 @@ pub fn Profile() -> impl IntoView {
                 use wasm_bindgen_futures::spawn_local;
                 let challenge_cloned = _challenge.clone();
                 let finish_reg = finish_reg_action.clone();
-                
+
                 spawn_local(async move {
                     let result = crate::auth::client::register(&challenge_cloned).await;
                     if let Ok(resp) = result {
-                        finish_reg.dispatch(FinishPasskeyRegistration {
-                            reg_response: resp,
-                        });
+                        finish_reg.dispatch(FinishPasskeyRegistration { reg_response: resp });
                     }
                 });
             }
@@ -41,7 +41,7 @@ pub fn Profile() -> impl IntoView {
     view! {
         <div class="profile-container">
             <h1>"User Profile"</h1>
-            
+
             <Suspense fallback=|| view! { <p>"Loading user data..."</p> }>
                 {move || user.get().map(|res| {
                     match res {
@@ -51,7 +51,7 @@ pub fn Profile() -> impl IntoView {
                                 <div class="stats-card">
                                     <p><strong>"Username: "</strong> {u.username}</p>
                                     <p><strong>"Role: "</strong> {u.role}</p>
-                                    <p><strong>"2FA Status: "</strong> 
+                                    <p><strong>"2FA Status: "</strong>
                                         {if u.totp_setup_completed { "Enabled" } else { "Not Set Up" }}
                                     </p>
                                 </div>
@@ -76,7 +76,7 @@ pub fn Profile() -> impl IntoView {
                                                                     <tr>
                                                                         <td>{hex::encode(&pk.credential_id[..8])}"..."</td>
                                                                         <td>
-                                                                            <button class="btn btn-danger btn-sm" 
+                                                                            <button class="btn btn-danger btn-sm"
                                                                                 on:click=move |_| { delete_action.dispatch(crate::server::DeletePasskey { credential_id: cred_id.clone() }); }
                                                                                 disabled=delete_action.pending()>
                                                                                 "Remove"

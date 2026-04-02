@@ -1,8 +1,8 @@
+use crate::components::sort::SortSelector;
+use crate::models::SortMode;
+use crate::server::{get_current_user, get_pubs, BulkUpdatePubsList};
 use leptos::prelude::*;
 use leptos_router::components::A;
-use crate::server::{get_pubs, BulkUpdatePubsList, get_current_user};
-use crate::models::SortMode;
-use crate::components::sort::SortSelector;
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -22,8 +22,15 @@ pub fn PubList() -> impl IntoView {
     let bulk_update_action = ServerAction::<BulkUpdatePubsList>::new();
 
     let pubs = Resource::new(
-        move || (query.get(), sort.get(), open_only.get(), bulk_update_action.value().get()),
-        |(q, s, open, _)| async move { get_pubs(q, Some(s), Some(open)).await }
+        move || {
+            (
+                query.get(),
+                sort.get(),
+                open_only.get(),
+                bulk_update_action.value().get(),
+            )
+        },
+        |(q, s, open, _)| async move { get_pubs(q, Some(s), Some(open)).await },
     );
 
     let on_bulk_apply = move |_| {
@@ -59,16 +66,16 @@ pub fn PubList() -> impl IntoView {
                     prop:value=query
                 />
                 <label class="open-only-toggle">
-                    <input 
-                        type="checkbox" 
+                    <input
+                        type="checkbox"
                         on:change=move |ev| set_open_only.set(event_target_checked(&ev))
                         prop:checked=open_only
                     />
                     " Open only"
                 </label>
-                <SortSelector 
-                    sort=Signal::from(sort) 
-                    on_change=Callback::new(move |mode| set_sort.set(mode)) 
+                <SortSelector
+                    sort=Signal::from(sort)
+                    on_change=Callback::new(move |mode| set_sort.set(mode))
                 />
                 <Suspense fallback=|| ()>
                     <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
@@ -106,7 +113,7 @@ pub fn PubList() -> impl IntoView {
                             let total = p.total_years_rank.unwrap_or(0);
                             let streak = p.current_streak.unwrap_or(0);
                             let year_text = p.latest_year.map(|y| format!("In GBG {}", y)).unwrap_or_else(|| "In GBG".to_string());
-                            
+
                             let is_selected = move || selected_ids.get().contains(&id);
 
                             view! {
@@ -117,7 +124,7 @@ pub fn PubList() -> impl IntoView {
                                     <A href=format!("/pub/{}", id) attr:class="pub-card">
                                         <h3>{name}</h3>
                                         <p>{format!("{}, {}", town, region)}</p>
-                                        
+
                                         <div class="card-stats">
                                             <div class=format!("stat-badge {}", if sort.get() == SortMode::TotalEntries { "highlight" } else { "" })>
                                                 <span class="count">{total}</span>

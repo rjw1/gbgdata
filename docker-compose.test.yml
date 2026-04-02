@@ -1,0 +1,11 @@
+services:
+  test-db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: gbgdata_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data

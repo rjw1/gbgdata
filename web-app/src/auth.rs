@@ -10,6 +10,20 @@ pub struct User {
 }
 
 #[cfg(feature = "ssr")]
+pub fn hash_password(password: &str) -> Result<String, anyhow::Error> {
+    use argon2::{
+        password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+        Argon2,
+    };
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| anyhow::anyhow!("Hashing failed: {}", e))
+}
+
+#[cfg(feature = "ssr")]
 pub fn verify_password(password: &str, hash: &str) -> bool {
     use argon2::{
         password_hash::{PasswordHash, PasswordVerifier},
@@ -54,10 +68,13 @@ pub fn verify_recovery_code(code: &str, hashed_codes: &[String]) -> bool {
 
 #[cfg(feature = "ssr")]
 pub mod session {
-    use tower_sessions::Session;
     use crate::auth::User;
+    use tower_sessions::Session;
 
-    pub async fn login(session: &Session, user: &User) -> Result<(), tower_sessions::session::Error> {
+    pub async fn login(
+        session: &Session,
+        user: &User,
+    ) -> Result<(), tower_sessions::session::Error> {
         session.insert("user", user).await?;
         Ok(())
     }

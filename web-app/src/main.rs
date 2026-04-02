@@ -1,7 +1,8 @@
-#[cfg(feature = "ssr")]
-use axum::response::IntoResponse;
+#![recursion_limit = "2048"]
 #[cfg(feature = "ssr")]
 use axum::http::header;
+#[cfg(feature = "ssr")]
+use axum::response::IntoResponse;
 
 #[cfg(feature = "ssr")]
 async fn robots_txt() -> impl IntoResponse {
@@ -22,20 +23,28 @@ async fn favicon_ico() -> impl IntoResponse {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
-    use axum::Router;
     use axum::routing::get;
-    use axum::http::{HeaderValue, header};
-    use web_app::app::*;
-    use web_app::export::*;
+    use axum::Router;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use sqlx::postgres::PgPoolOptions;
     use tower_http::services::ServeDir;
-    use tower_http::set_header::SetResponseHeaderLayer;
-    use tower_sessions::{SessionManagerLayer, Expiry};
+    use tower_sessions::{Expiry, SessionManagerLayer};
     use tower_sessions_sqlx_store::PostgresStore;
+    use web_app::app::*;
+    use web_app::export::*;
 
     dotenvy::dotenv().ok();
+
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    let _ = tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,web_app=info")),
+        )
+        .try_init();
+
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -51,16 +60,26 @@ async fn main() {
 
     // Session setup
     let session_store = PostgresStore::new(pool.clone());
-    session_store.migrate().await.expect("Failed to migrate session store");
+    session_store
+        .migrate()
+        .await
+        .expect("Failed to migrate session store");
+
+    let leptos_env = std::env::var("LEPTOS_ENV")
+        .map(|v| v.to_lowercase())
+        .unwrap_or_default();
+    let is_prod = leptos_env == "prod" || leptos_env == "production";
 
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false) // Set to true in production with HTTPS
-        .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::days(7)));
+        .with_secure(is_prod)
+        .with_expiry(Expiry::OnInactivity(
+            tower_sessions::cookie::time::Duration::days(7),
+        ));
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
-    
+
     let state = AppState {
         leptos_options: leptos_options.clone(),
         pool: pool.clone(),
@@ -70,7 +89,10 @@ async fn main() {
     let routes = generate_route_list(App);
 
     let app = Router::new()
-        .nest_service("/pkg", ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)))
+        .nest_service(
+            "/pkg",
+            ServeDir::new(format!("{}/pkg", &*leptos_options.site_root)),
+        )
         .nest_service("/assets", ServeDir::new(&*leptos_options.site_root))
         .route("/robots.txt", get(robots_txt))
         .route("/favicon.ico", get(favicon_ico))
@@ -98,14 +120,13 @@ async fn main() {
                 let leptos_options = leptos_options.clone();
                 move || shell(leptos_options.clone())
             },
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static("noindex, nofollow, noarchive, noai, noimageai"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::HeaderName::from_static("x-frame-options"),
-            HeaderValue::from_static("DENY"),
+        ));
+
+    let app = web_app::server::apply_security_headers(app, is_prod);
+
+    let app = app
+        .layer(axum::middleware::from_fn(
+            web_app::server::admin_auth_middleware,
         ))
         .layer(session_layer)
         .with_state(state);

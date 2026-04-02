@@ -1,11 +1,11 @@
-use leptos::prelude::*;
 use crate::models::PubDetail;
-use crate::server::{UpdatePub};
+use crate::server::UpdatePub;
+use leptos::prelude::*;
 
 #[component]
 pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
     let update_action = ServerAction::<UpdatePub>::new();
-    
+
     // Form fields as signals initialized with pub_data
     let (name, set_name) = signal(pub_data.name.clone());
     let (address, set_address) = signal(pub_data.address.clone());
@@ -69,21 +69,23 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
     let on_submit = move |ev: leptos::web_sys::SubmitEvent| {
         ev.prevent_default();
         update_action.dispatch(UpdatePub {
-            id: pub_data.id,
-            name: name.get(),
-            address: address.get(),
-            town: town.get(),
-            region: region.get(),
-            country_code: pub_data.country_code.clone(),
-            postcode: postcode.get(),
-            closed: closed.get(),
-            lat: lat.get(),
-            lon: lon.get(),
-            untappd_id: untappd_id.get(),
-            google_maps_id: google_maps_id.get(),
-            whatpub_id: whatpub_id.get(),
-            rgl_id: rgl_id.get(),
-            years: years.get(),
+            req: crate::models::UpdatePubRequest {
+                id: pub_data.id,
+                name: name.get(),
+                address: address.get(),
+                town: town.get(),
+                region: region.get(),
+                country_code: pub_data.country_code.clone(),
+                postcode: postcode.get(),
+                closed: closed.get(),
+                lat: lat.get(),
+                lon: lon.get(),
+                untappd_id: untappd_id.get(),
+                google_maps_id: google_maps_id.get(),
+                whatpub_id: whatpub_id.get(),
+                rgl_id: rgl_id.get(),
+                years: years.get(),
+            },
         });
 
         if !photo_image_url.get().is_empty() && photo_is_cc.get() {
@@ -98,7 +100,7 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                     license_type: photo_license.get(),
                     license_url: photo_license_url.get(),
                     is_cc_licensed: photo_is_cc.get(),
-                }
+                },
             });
         }
     };
@@ -140,12 +142,12 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                         </div>
                         <div class="form-group">
                             <label>"Latitude"</label>
-                            <input type="number" step="any" value=move || lat.get().map(|v| v.to_string()).unwrap_or_default() 
+                            <input type="number" step="any" value=move || lat.get().map(|v| v.to_string()).unwrap_or_default()
                                 on:input=move |ev| set_lat.set(event_target_value(&ev).parse().ok()) />
                         </div>
                         <div class="form-group">
                             <label>"Longitude"</label>
-                            <input type="number" step="any" value=move || lon.get().map(|v| v.to_string()).unwrap_or_default() 
+                            <input type="number" step="any" value=move || lon.get().map(|v| v.to_string()).unwrap_or_default()
                                 on:input=move |ev| set_lon.set(event_target_value(&ev).parse().ok()) />
                         </div>
                         <div class="form-group checkbox">
@@ -160,18 +162,18 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                     <div class="form-grid">
                         <div class="form-group">
                             <label>"Untappd ID"</label>
-                            <input type="text" value=move || untappd_id.get().unwrap_or_default() 
+                            <input type="text" value=move || untappd_id.get().unwrap_or_default()
                                 on:input=move |ev| set_untappd_id.set(Some(event_target_value(&ev))) />
                         </div>
                         <div class="form-group">
                             <label>"WhatPub ID"</label>
-                            <input type="text" value=move || whatpub_id.get().unwrap_or_default() 
+                            <input type="text" value=move || whatpub_id.get().unwrap_or_default()
                                 on:input=move |ev| set_whatpub_id.set(Some(event_target_value(&ev))) />
                         </div>
                         <div class="form-group">
                             <label>"Google Maps ID"</label>
                             <div class="input-with-button">
-                                <input type="text" value=move || google_maps_id.get().unwrap_or_default() 
+                                <input type="text" value=move || google_maps_id.get().unwrap_or_default()
                                     on:input=move |ev| set_google_maps_id.set(Some(event_target_value(&ev))) />
                                 <button type="button" class="btn btn-secondary btn-sm" on:click=move |_| {
                                     let _ = window().open_with_url_and_target("https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder", "_blank");
@@ -183,7 +185,7 @@ pub fn EditPub(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
                         </div>
                         <div class="form-group">
                             <label>"RGL ID"</label>
-                            <input type="text" value=move || rgl_id.get().unwrap_or_default() 
+                            <input type="text" value=move || rgl_id.get().unwrap_or_default()
                                 on:input=move |ev| set_rgl_id.set(Some(event_target_value(&ev))) />
                         </div>
                     </div>

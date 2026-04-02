@@ -1,6 +1,6 @@
-use leptos::prelude::*;
 use crate::models::PubDetail;
 use crate::server::SuggestUpdate;
+use leptos::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 enum SuggestionCategory {
@@ -17,7 +17,7 @@ enum SuggestionCategory {
 pub fn SuggestUpdateModal(pub_data: PubDetail, on_close: Callback<()>) -> impl IntoView {
     let (category, set_category) = signal(SuggestionCategory::Menu);
     let suggest_action = ServerAction::<SuggestUpdate>::new();
-    
+
     // Form state (initialized with current values)
     let (closed, set_closed) = signal(pub_data.closed);
     let (whatpub_id, set_whatpub_id) = signal(pub_data.whatpub_id.clone());
@@ -35,24 +35,48 @@ pub fn SuggestUpdateModal(pub_data: PubDetail, on_close: Callback<()>) -> impl I
 
     let on_submit = move |ev: leptos::web_sys::SubmitEvent| {
         ev.prevent_default();
-        
+
         let mut final_data = serde_json::to_value(pub_data.clone()).unwrap();
         let obj = final_data.as_object_mut().unwrap();
-        
+
         // Apply modifications
         obj.insert("closed".to_string(), serde_json::Value::Bool(closed.get()));
-        obj.insert("whatpub_id".to_string(), serde_json::to_value(whatpub_id.get()).unwrap());
-        obj.insert("google_maps_id".to_string(), serde_json::to_value(google_maps_id.get()).unwrap());
-        obj.insert("untappd_id".to_string(), serde_json::to_value(untappd_id.get()).unwrap());
-        obj.insert("address".to_string(), serde_json::Value::String(address.get()));
+        obj.insert(
+            "whatpub_id".to_string(),
+            serde_json::to_value(whatpub_id.get()).unwrap(),
+        );
+        obj.insert(
+            "google_maps_id".to_string(),
+            serde_json::to_value(google_maps_id.get()).unwrap(),
+        );
+        obj.insert(
+            "untappd_id".to_string(),
+            serde_json::to_value(untappd_id.get()).unwrap(),
+        );
+        obj.insert(
+            "address".to_string(),
+            serde_json::Value::String(address.get()),
+        );
         obj.insert("town".to_string(), serde_json::Value::String(town.get()));
-        obj.insert("region".to_string(), serde_json::Value::String(region.get()));
-        obj.insert("postcode".to_string(), serde_json::Value::String(postcode.get()));
-        obj.insert("years".to_string(), serde_json::to_value(years.get()).unwrap());
-        
+        obj.insert(
+            "region".to_string(),
+            serde_json::Value::String(region.get()),
+        );
+        obj.insert(
+            "postcode".to_string(),
+            serde_json::Value::String(postcode.get()),
+        );
+        obj.insert(
+            "years".to_string(),
+            serde_json::to_value(years.get()).unwrap(),
+        );
+
         // Add meta notes if any
         if !notes.get().is_empty() {
-            obj.insert("suggestion_notes".to_string(), serde_json::Value::String(notes.get()));
+            obj.insert(
+                "suggestion_notes".to_string(),
+                serde_json::Value::String(notes.get()),
+            );
         }
 
         suggest_action.dispatch(SuggestUpdate {
