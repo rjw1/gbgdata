@@ -6,11 +6,11 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "Running migrations against $DATABASE_URL..."
+echo "Running migrations against test database..."
 
 for f in migrations/*.sql; do
   echo "Applying $f..."
-  psql "$DATABASE_URL" -f "$f" > /dev/null
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f" > /dev/null
 done
 
 echo "Migrations complete."
