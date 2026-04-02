@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, username, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash FROM users WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "totp_setup_completed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "totp_secret_enc",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 5,
+        "name": "recovery_codes_hash",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bb0de0184c883bb3b2a6da8bb7d57e129bba7407f6744bad126c44e022893caa"
+}

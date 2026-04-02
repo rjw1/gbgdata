@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pub_id, suggested_data FROM suggested_updates WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pub_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "suggested_data",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "412a6523e7cdbc0ab4e4b93ba979ba780f2c4ca0db6c72888fc92ed329e67fb9"
+}

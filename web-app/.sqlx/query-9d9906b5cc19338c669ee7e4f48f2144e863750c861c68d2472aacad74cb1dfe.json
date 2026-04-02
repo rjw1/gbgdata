@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pubs SET \n                name = COALESCE($1, name),\n                address = COALESCE($2, address),\n                town = COALESCE($3, town),\n                region = COALESCE($4, region),\n                postcode = COALESCE($5, postcode),\n                closed = COALESCE($6, closed),\n                whatpub_id = COALESCE($7, whatpub_id),\n                google_maps_id = COALESCE($8, google_maps_id),\n                untappd_id = COALESCE($9, untappd_id)\n             WHERE id = $10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9d9906b5cc19338c669ee7e4f48f2144e863750c861c68d2472aacad74cb1dfe"
+}

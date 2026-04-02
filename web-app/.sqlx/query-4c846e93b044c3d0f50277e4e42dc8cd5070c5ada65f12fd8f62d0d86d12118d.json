@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, pub_id, flickr_id, image_url, original_url, owner_name, license_type, license_url, COALESCE(is_cc_licensed, TRUE) as \"is_cc_licensed!: bool\"\n           FROM pub_photos WHERE pub_id = $1 ORDER BY created_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pub_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "flickr_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "original_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "owner_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "license_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "license_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_cc_licensed!: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4c846e93b044c3d0f50277e4e42dc8cd5070c5ada65f12fd8f62d0d86d12118d"
+}

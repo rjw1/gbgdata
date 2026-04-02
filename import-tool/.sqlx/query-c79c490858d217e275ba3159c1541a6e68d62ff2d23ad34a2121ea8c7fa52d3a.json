@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, COALESCE(address, '') as address, COALESCE(town, '') as town, COALESCE(postcode, '') as postcode, COALESCE(region, '') as region\n         FROM pubs WHERE location IS NULL AND closed = false LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "town",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "postcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "region",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c79c490858d217e275ba3159c1541a6e68d62ff2d23ad34a2121ea8c7fa52d3a"
+}

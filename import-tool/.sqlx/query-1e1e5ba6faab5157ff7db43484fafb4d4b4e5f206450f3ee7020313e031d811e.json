@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pubs SET untappd_id = $1, untappd_verified = $2 WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e1e5ba6faab5157ff7db43484fafb4d4b4e5f206450f3ee7020313e031d811e"
+}

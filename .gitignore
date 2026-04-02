@@ -12,6 +12,7 @@ pubs.json
 !migrations/*.sql
 
 # Web App Artifacts
-site/pkg/
+site/
+web-app/site/
 
 scripts

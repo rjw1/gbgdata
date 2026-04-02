@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_credentials SET sign_count = $1 WHERE credential_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d9d4fb3df77d8877fb8a05f19fd9e15927a98962419bf9e4794a3b23b6da145"
+}
