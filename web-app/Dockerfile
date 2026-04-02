@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     curl \
+    git \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,10 +21,12 @@ WORKDIR /app
 # Copy the workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY web-app ./web-app
+COPY import-tool ./import-tool
 COPY migrations ./migrations
 
 # Build the application in release mode
 WORKDIR /app/web-app
+ENV SQLX_OFFLINE=true
 RUN cargo leptos build --release -vv
 
 # RUNNER STAGE
@@ -38,9 +41,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy the server binary and site directory from the builder
-# Paths are based on cargo-leptos 0.8.0 defaults and README.md
-COPY --from=builder /app/target/server/release/web-app /usr/local/bin/web-app
-COPY --from=builder /app/target/site /app/site
+# Paths are based on cargo-leptos 0.8.0 build from the workspace root
+COPY --from=builder /app/target/release/web-app /usr/local/bin/web-app
+COPY --from=builder /app/site /app/site
 
 # Set environment variables
 ENV LEPTOS_OUTPUT_NAME="web-app"

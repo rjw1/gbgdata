@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT role FROM user_invites WHERE id = $1 AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a612ea78caeb0e53ce8a898bb035101f00c2f9b9b7905ec0c1690ec6a8dd9366"
+}

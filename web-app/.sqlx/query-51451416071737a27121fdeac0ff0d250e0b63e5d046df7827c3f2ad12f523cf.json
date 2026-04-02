@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM gbg_history WHERE pub_id = $1 AND year = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51451416071737a27121fdeac0ff0d250e0b63e5d046df7827c3f2ad12f523cf"
+}

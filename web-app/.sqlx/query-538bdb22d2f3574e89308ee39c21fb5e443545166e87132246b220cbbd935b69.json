@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.public_key FROM user_credentials c JOIN users u ON c.user_id = u.id WHERE u.username = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "public_key",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "538bdb22d2f3574e89308ee39c21fb5e443545166e87132246b220cbbd935b69"
+}

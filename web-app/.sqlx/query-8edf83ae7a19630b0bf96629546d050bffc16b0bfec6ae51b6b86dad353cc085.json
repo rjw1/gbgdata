@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pubs SET \n            name = $1, address = $2, town = $3, region = $4, country_code = $5, postcode = $6, \n            closed = $7, \n            location = CASE WHEN $8::float8 IS NOT NULL AND $9::float8 IS NOT NULL \n                       THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)::geography \n                       ELSE location END,\n            untappd_id = $11, google_maps_id = $12, whatpub_id = $13, rgl_id = $14\n           WHERE id = $10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Float8",
+        "Float8",
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8edf83ae7a19630b0bf96629546d050bffc16b0bfec6ae51b6b86dad353cc085"
+}

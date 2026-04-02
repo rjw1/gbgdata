@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggested_updates (pub_id, user_id, suggested_data) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7c1b64d47f82f1799b01e9ae7bff1f2ed42e32446a4bf7746b064b2a673f405"
+}

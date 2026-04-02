@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET recovery_codes_hash = $1 WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7193c0d7866b6dbf80aff7a30fb91c7a09bef1df14899df82612a21f282de0c6"
+}

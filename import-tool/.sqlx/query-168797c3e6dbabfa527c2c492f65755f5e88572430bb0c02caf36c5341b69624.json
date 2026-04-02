@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (username, password_hash, totp_secret_enc, recovery_codes_hash) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Bytea",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "168797c3e6dbabfa527c2c492f65755f5e88572430bb0c02caf36c5341b69624"
+}

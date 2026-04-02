@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggested_updates SET status = $1, processed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5befc46873ff158ed38f751c7ce822e7c6804d85a540d71abc8d32cd9d1b5ae4"
+}

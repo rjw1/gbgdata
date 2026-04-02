@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (username, password_hash, role, totp_setup_completed, totp_secret_enc, recovery_codes_hash) \n         VALUES ($1, $2, $3, false, $4, $5) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Bytea",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9c052253f7d3c526bfdaba38649d811f897b596cbf25c5a8132001ba43d76d05"
+}
