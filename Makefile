@@ -1,9 +1,9 @@
 # gbgdata Makefile
 
-.PHONY: build test lint security e2e all clean db-up db-down
+.PHONY: build test lint security e2e all clean db-up db-down sqlx-prepare docker-check
 
 # Default target
-all: lint security build test
+all: lint security build test sqlx-prepare docker-check
 
 # Database management
 db-up:
@@ -25,6 +25,18 @@ db-up:
 
 db-down:
 	docker compose -f docker-compose.test.yml down
+
+# SQLx offline mode preparation
+sqlx-prepare:
+	@set -e; trap 'cd $(CURDIR) && $(MAKE) db-down' EXIT; \
+	$(MAKE) db-up; \
+	(cd web-app && DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cargo sqlx prepare -- --features ssr); \
+	(cd import-tool && DATABASE_URL=postgres://test_user:test_password@localhost:5433/gbgdata_test cargo sqlx prepare)
+
+# Docker build verification
+docker-check:
+	docker build -f web-app/Dockerfile . -t gbgdata-web-check --build-arg SQLX_OFFLINE=true
+
 
 # Build targets
 build:

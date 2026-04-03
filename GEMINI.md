@@ -41,6 +41,9 @@ A full-stack Rust application for analyzing and visualizing historical Good Beer
 - **Build Verification**: After modifying `web-app`, ALWAYS verify the build for both features:
   - `cargo check --features ssr` (Server-side rendering)
   - `cargo check --features hydrate` (Client-side WASM)
+- **Production Readiness**: When adding new features or modifying database queries:
+  - **SQLx Cache**: Run `make sqlx-prepare` to update the offline query cache for production builds.
+  - **Docker Build**: Run `make docker-check` to verify that the production Dockerfile builds correctly in offline mode.
 - **Import Tool**: Add unit tests to `import-tool/src/parsers.rs` for new data formats.
 - **Web App**: Expand the Playwright suite in `web-app/end2end/` for critical UI flows.
 
