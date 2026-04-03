@@ -422,9 +422,8 @@ pub fn AdminDashboard() -> impl IntoView {
                                                 {if s.is_hard_locked {
                                                     view! { <p class="help-text">"Hard-locked via environment variable."</p> }.into_any()
                                                 } else {
-                                                    view! {}.into_any()
-                                                }}
-                                            </div>
+                                                    ().into_any()
+                                                }}                                            </div>
                                         }.into_any(),
                                         _ => view! { <p>"Error loading settings."</p> }.into_any(),
                                     }}

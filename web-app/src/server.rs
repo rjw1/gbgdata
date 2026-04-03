@@ -300,9 +300,17 @@ pub async fn site_auth_middleware(
     use axum::response::IntoResponse;
 
     let path = request.uri().path();
-    
+
     // 1. Allow static assets and essential paths
-    let allowed_prefixes = ["/pkg", "/assets", "/login", "/register", "/about", "/robots.txt", "/favicon.ico"];
+    let allowed_prefixes = [
+        "/pkg",
+        "/assets",
+        "/login",
+        "/register",
+        "/about",
+        "/robots.txt",
+        "/favicon.ico",
+    ];
     if allowed_prefixes.iter().any(|p| path.starts_with(p)) || path == "/" {
         return next.run(request).await;
     }
@@ -317,10 +325,10 @@ pub async fn site_auth_middleware(
             "/api/ValidateInvite",
             "/api/Verify2FA",
             "/api/StartPasskeyAuthentication",
-            "/api/FinishPasskeyAuthentication"
+            "/api/FinishPasskeyAuthentication",
         ];
-        
-        if public_api_calls.iter().any(|p| path == *p) {
+
+        if public_api_calls.contains(&path) {
             return next.run(request).await;
         }
 
@@ -331,7 +339,7 @@ pub async fn site_auth_middleware(
                 return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
             }
         }
-        
+
         // Otherwise continue (standard role checks inside server functions handle admin etc)
         return next.run(request).await;
     }
@@ -2800,9 +2808,7 @@ pub async fn get_site_settings() -> Result<SiteSettings, ServerFnError> {
 }
 
 #[server(UpdateSiteSettings, "/api")]
-pub async fn update_site_settings(
-    req: UpdateSiteSettingsRequest,
-) -> Result<(), ServerFnError> {
+pub async fn update_site_settings(req: UpdateSiteSettingsRequest) -> Result<(), ServerFnError> {
     use crate::auth::session;
     use leptos::context::use_context;
     use leptos_axum::extract;
