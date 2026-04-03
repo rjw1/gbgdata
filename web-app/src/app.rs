@@ -110,6 +110,7 @@ pub fn App() -> impl IntoView {
 #[component]
 fn RouterContent() -> impl IntoView {
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
+    let site_settings = Resource::new(|| (), |_| crate::server::get_site_settings());
     let navigate = leptos_router::hooks::use_navigate();
     let location = leptos_router::hooks::use_location();
 
@@ -145,6 +146,12 @@ fn RouterContent() -> impl IntoView {
                     <A href="/about">"About"</A>
                     " | "
                     <A href="/profile">"Profile"</A>
+                    <Suspense fallback=|| ()>
+                        <Show when=move || matches!(site_settings.get(), Some(Ok(s)) if s.private_mode)>
+                            " | "
+                            <span class="badge-private">"PRIVATE"</span>
+                        </Show>
+                    </Suspense>
                     <Suspense fallback=|| ()>
                         <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
                             " | "

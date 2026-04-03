@@ -414,13 +414,22 @@ a {
 .badge.closed { background-color: var(--closed); }
 .badge.open { background-color: var(--open); }
 
-.card-stats {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  flex-wrap: wrap;
+.badge-private {
+    background-color: #ff4444;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    vertical-align: middle;
 }
 
+.card-stats {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
 .stat-badge {
   font-size: 0.75rem;
   font-weight: bold;
@@ -1029,6 +1038,52 @@ a {
 
   p { margin: 0; }
   button { width: auto; padding: 0.4rem 0.8rem; margin-left: 0.5rem; }
+}
+
+/* Site Settings */
+.settings-card {
+  background: var(--off-white);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-top: 1rem;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+.settings-info {
+  flex: 1;
+
+  strong {
+    display: block;
+    font-size: 1.1rem;
+    color: var(--forest-green);
+    margin-bottom: 0.25rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #888;
+  }
+}
+
+.help-text {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 1rem;
+  font-style: italic;
 }
 
 footer {

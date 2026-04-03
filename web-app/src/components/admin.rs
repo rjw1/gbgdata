@@ -81,6 +81,12 @@ pub fn AdminDashboard() -> impl IntoView {
 
     let process_suggestion = ServerAction::<ProcessSuggestedUpdate>::new();
 
+    let update_settings_action = ServerAction::<crate::server::UpdateSiteSettings>::new();
+    let site_settings = Resource::new(
+        move || update_settings_action.version().get(),
+        |_| async move { crate::server::get_site_settings().await },
+    );
+
     Effect::new(move |_| {
         if process_suggestion.value().get().is_some() {
             suggestions.refetch();
@@ -144,6 +150,10 @@ pub fn AdminDashboard() -> impl IntoView {
                                 <button class=move || format!("btn btn-sm {}", if active_tab.get() == "users" { "btn-primary active" } else { "btn-ghost" })
                                     on:click=move |_| set_active_tab.set("users".to_string())>
                                     "Users"
+                                </button>
+                                <button class=move || format!("btn btn-sm {}", if active_tab.get() == "settings" { "btn-primary active" } else { "btn-ghost" })
+                                    on:click=move |_| set_active_tab.set("settings".to_string())>
+                                    "Settings"
                                 </button>
                             </div>
 
@@ -384,7 +394,44 @@ pub fn AdminDashboard() -> impl IntoView {
                                 </div>
                             </Show>
 
-                            <Show when=move || active_tab.get() != "activity" && active_tab.get() != "suggestions" && active_tab.get() != "users">
+                            <Show when=move || active_tab.get() == "settings">
+                                <h3>"Site Settings"</h3>
+                                <Transition fallback=|| view! { <p>"Loading settings..."</p> }>
+                                    {move || match site_settings.get() {
+                                        Some(Ok(s)) => view! {
+                                            <div class="settings-card">
+                                                <div class="settings-row">
+                                                    <div class="settings-info">
+                                                        <strong>"Private Mode"</strong>
+                                                        <p>"Require login to view pub data and statistics."</p>
+                                                    </div>
+                                                    <div class="settings-control">
+                                                        <button
+                                                            class=move || format!("btn {}", if s.private_mode { "btn-danger" } else { "btn-primary" })
+                                                            on:click=move |_| {
+                                                                update_settings_action.dispatch(crate::server::UpdateSiteSettings {
+                                                                    req: crate::models::UpdateSiteSettingsRequest { private_mode: !s.private_mode }
+                                                                });
+                                                            }
+                                                            disabled=s.is_hard_locked
+                                                        >
+                                                            {if s.private_mode { "Disable" } else { "Enable" }}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {if s.is_hard_locked {
+                                                    view! { <p class="help-text">"Hard-locked via environment variable."</p> }.into_any()
+                                                } else {
+                                                    view! {}.into_any()
+                                                }}
+                                            </div>
+                                        }.into_any(),
+                                        _ => view! { <p>"Error loading settings."</p> }.into_any(),
+                                    }}
+                                </Transition>
+                            </Show>
+
+                            <Show when=move || active_tab.get() != "activity" && active_tab.get() != "suggestions" && active_tab.get() != "users" && active_tab.get() != "settings">
                                 <h3>{move || match active_tab.get().as_str() {
                                     "coords" => "Pubs with Missing Coordinates",
                                     "ids" => "Pubs with Missing External IDs",
