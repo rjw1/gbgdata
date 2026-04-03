@@ -291,7 +291,7 @@ where
 }
 
 #[cfg(feature = "ssr")]
-pub async fn admin_auth_middleware(
+pub async fn site_auth_middleware(
     session: tower_sessions::Session,
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -300,6 +300,23 @@ pub async fn admin_auth_middleware(
     use axum::response::IntoResponse;
 
     let path = request.uri().path();
+    
+    // 1. Allow static assets and essential paths
+    let allowed_prefixes = ["/pkg", "/assets", "/login", "/register", "/about", "/robots.txt", "/favicon.ico", "/api"];
+    if allowed_prefixes.iter().any(|p| path.starts_with(p)) || path == "/" {
+        // We'll handle the root path ("/") redirect in the Leptos router for better UX
+        return next.run(request).await;
+    }
+
+    // 2. Check if private mode is active
+    if is_private_mode_active().await {
+        let user: Option<User> = session.get("user").await.ok().flatten();
+        if user.is_none() {
+            return axum::response::Redirect::temporary("/login").into_response();
+        }
+    }
+
+    // 3. Admin enforcement
     if path.starts_with("/admin") {
         let user: Option<User> = session.get("user").await.ok().flatten();
         match user {
