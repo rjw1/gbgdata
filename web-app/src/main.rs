@@ -126,7 +126,7 @@ async fn main() {
 
     let app = app
         .layer(axum::middleware::from_fn(
-            web_app::server::admin_auth_middleware,
+            web_app::server::site_auth_middleware,
         ))
         .layer(session_layer)
         .with_state(state);

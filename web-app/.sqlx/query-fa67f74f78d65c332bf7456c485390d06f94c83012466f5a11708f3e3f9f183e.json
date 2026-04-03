@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE site_settings SET private_mode = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa67f74f78d65c332bf7456c485390d06f94c83012466f5a11708f3e3f9f183e"
+}

@@ -110,18 +110,35 @@ pub fn App() -> impl IntoView {
 #[component]
 fn RouterContent() -> impl IntoView {
     let user = Resource::new(|| (), |_| crate::server::get_current_user());
+    let site_settings = Resource::new(|| (), |_| crate::server::get_site_settings());
     let navigate = leptos_router::hooks::use_navigate();
     let location = leptos_router::hooks::use_location();
 
+    let nav_totp = navigate.clone();
+    let loc_totp = location.clone();
     Effect::new(move |_| {
         if let Some(Ok(Some(u))) = user.get() {
-            let path = location.pathname.get();
+            let path = loc_totp.pathname.get();
             if !u.totp_setup_completed
                 && path != "/setup-2fa"
                 && path != "/login"
                 && path != "/about"
             {
-                navigate("/setup-2fa", Default::default());
+                nav_totp("/setup-2fa", Default::default());
+            }
+        }
+    });
+
+    let nav_private = navigate.clone();
+    let loc_private = location.clone();
+    Effect::new(move |_| {
+        if let (Some(Ok(s)), Some(Ok(user_opt))) = (site_settings.get(), user.get()) {
+            if s.private_mode && user_opt.is_none() {
+                let path = loc_private.pathname.get();
+                let allowed_prefixes = ["/login", "/register", "/about"];
+                if !allowed_prefixes.iter().any(|p| path.starts_with(p)) {
+                    nav_private("/login", Default::default());
+                }
             }
         }
     });
@@ -145,6 +162,12 @@ fn RouterContent() -> impl IntoView {
                     <A href="/about">"About"</A>
                     " | "
                     <A href="/profile">"Profile"</A>
+                    <Suspense fallback=|| ()>
+                        <Show when=move || matches!(site_settings.get(), Some(Ok(s)) if s.private_mode)>
+                            " | "
+                            <span class="badge-private">"PRIVATE"</span>
+                        </Show>
+                    </Suspense>
                     <Suspense fallback=|| ()>
                         <Show when=move || matches!(user.get(), Some(Ok(Some(ref u))) if u.role == "admin" || u.role == "owner")>
                             " | "

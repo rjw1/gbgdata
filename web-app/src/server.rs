@@ -2,8 +2,8 @@ use crate::auth::User;
 #[cfg(feature = "ssr")]
 use crate::models::{OutcodeSummary, TownSummary};
 use crate::models::{
-    PubDetail, PubSummary, RegionDetails, RegionSummary, SortMode, UserAuthStatus, UserInvite,
-    UserManagementEntry, YearSummary,
+    PubDetail, PubSummary, RegionDetails, RegionSummary, SiteSettings, SortMode,
+    UpdateSiteSettingsRequest, UserAuthStatus, UserInvite, UserManagementEntry, YearSummary,
 };
 use leptos::prelude::*;
 use uuid::Uuid;
@@ -291,7 +291,7 @@ where
 }
 
 #[cfg(feature = "ssr")]
-pub async fn admin_auth_middleware(
+pub async fn site_auth_middleware(
     session: tower_sessions::Session,
     request: axum::extract::Request,
     next: axum::middleware::Next,
@@ -300,6 +300,59 @@ pub async fn admin_auth_middleware(
     use axum::response::IntoResponse;
 
     let path = request.uri().path();
+
+    // 1. Allow static assets and essential paths
+    let allowed_prefixes = [
+        "/pkg",
+        "/assets",
+        "/login",
+        "/register",
+        "/about",
+        "/robots.txt",
+        "/favicon.ico",
+    ];
+    if allowed_prefixes.iter().any(|p| path.starts_with(p)) || path == "/" {
+        return next.run(request).await;
+    }
+
+    // 2. Handle API calls specifically
+    if path.starts_with("/api") {
+        // Essential public API calls (Auth, Settings, etc.)
+        let public_api_calls = [
+            "/api/GetSiteSettings",
+            "/api/Login",
+            "/api/RegisterUser",
+            "/api/ValidateInvite",
+            "/api/Verify2FA",
+            "/api/StartPasskeyAuthentication",
+            "/api/FinishPasskeyAuthentication",
+        ];
+
+        if public_api_calls.contains(&path) {
+            return next.run(request).await;
+        }
+
+        // If private mode is active, block all other API calls for unauthenticated users
+        if is_private_mode_active().await {
+            let user: Option<User> = session.get("user").await.ok().flatten();
+            if user.is_none() {
+                return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+            }
+        }
+
+        // Otherwise continue (standard role checks inside server functions handle admin etc)
+        return next.run(request).await;
+    }
+
+    // 3. Check if private mode is active for normal page requests
+    if is_private_mode_active().await {
+        let user: Option<User> = session.get("user").await.ok().flatten();
+        if user.is_none() {
+            return axum::response::Redirect::temporary("/login").into_response();
+        }
+    }
+
+    // 4. Admin enforcement (standard page requests)
     if path.starts_with("/admin") {
         let user: Option<User> = session.get("user").await.ok().flatten();
         match user {
@@ -2706,6 +2759,76 @@ pub async fn delete_passkey(credential_id: Vec<u8>) -> Result<(), ServerFnError>
         "DELETE FROM user_credentials WHERE user_id = $1 AND credential_id = $2",
         user.id,
         credential_id
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
+}
+
+#[cfg(feature = "ssr")]
+pub async fn is_private_mode_active() -> bool {
+    if std::env::var("PRIVATE_MODE").unwrap_or_default() == "true" {
+        return true;
+    }
+
+    use leptos::context::use_context;
+    use sqlx::PgPool;
+
+    let pool = match use_context::<PgPool>() {
+        Some(p) => p,
+        None => return false, // Default to public if pool is missing
+    };
+
+    sqlx::query_scalar!("SELECT private_mode FROM site_settings LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(false)
+}
+
+#[server(GetSiteSettings, "/api")]
+pub async fn get_site_settings() -> Result<SiteSettings, ServerFnError> {
+    use leptos::context::use_context;
+    use sqlx::PgPool;
+
+    let is_hard_locked = std::env::var("PRIVATE_MODE").unwrap_or_default() == "true";
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+
+    let private_mode = sqlx::query_scalar!("SELECT private_mode FROM site_settings LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(SiteSettings {
+        private_mode: is_hard_locked || private_mode,
+        is_hard_locked,
+    })
+}
+
+#[server(UpdateSiteSettings, "/api")]
+pub async fn update_site_settings(req: UpdateSiteSettingsRequest) -> Result<(), ServerFnError> {
+    use crate::auth::session;
+    use leptos::context::use_context;
+    use leptos_axum::extract;
+    use sqlx::PgPool;
+    use tower_sessions::Session;
+
+    let pool = use_context::<PgPool>().ok_or_else(|| ServerFnError::new("Pool not found"))?;
+    let session = extract::<Session>().await?;
+    let user = session::get_user(&session)
+        .await
+        .ok_or_else(|| ServerFnError::new("Unauthorized"))?;
+
+    if user.role != "admin" && user.role != "owner" {
+        return Err(ServerFnError::new("Unauthorized"));
+    }
+
+    sqlx::query!(
+        "UPDATE site_settings SET private_mode = $1, updated_at = CURRENT_TIMESTAMP, updated_by = $2",
+        req.private_mode,
+        user.id
     )
     .execute(&pool)
     .await
