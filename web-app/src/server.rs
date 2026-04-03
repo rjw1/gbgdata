@@ -302,13 +302,41 @@ pub async fn site_auth_middleware(
     let path = request.uri().path();
     
     // 1. Allow static assets and essential paths
-    let allowed_prefixes = ["/pkg", "/assets", "/login", "/register", "/about", "/robots.txt", "/favicon.ico", "/api"];
+    let allowed_prefixes = ["/pkg", "/assets", "/login", "/register", "/about", "/robots.txt", "/favicon.ico"];
     if allowed_prefixes.iter().any(|p| path.starts_with(p)) || path == "/" {
-        // We'll handle the root path ("/") redirect in the Leptos router for better UX
         return next.run(request).await;
     }
 
-    // 2. Check if private mode is active
+    // 2. Handle API calls specifically
+    if path.starts_with("/api") {
+        // Essential public API calls (Auth, Settings, etc.)
+        let public_api_calls = [
+            "/api/GetSiteSettings",
+            "/api/Login",
+            "/api/RegisterUser",
+            "/api/ValidateInvite",
+            "/api/Verify2FA",
+            "/api/StartPasskeyAuthentication",
+            "/api/FinishPasskeyAuthentication"
+        ];
+        
+        if public_api_calls.iter().any(|p| path == *p) {
+            return next.run(request).await;
+        }
+
+        // If private mode is active, block all other API calls for unauthenticated users
+        if is_private_mode_active().await {
+            let user: Option<User> = session.get("user").await.ok().flatten();
+            if user.is_none() {
+                return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+            }
+        }
+        
+        // Otherwise continue (standard role checks inside server functions handle admin etc)
+        return next.run(request).await;
+    }
+
+    // 3. Check if private mode is active for normal page requests
     if is_private_mode_active().await {
         let user: Option<User> = session.get("user").await.ok().flatten();
         if user.is_none() {
@@ -316,7 +344,7 @@ pub async fn site_auth_middleware(
         }
     }
 
-    // 3. Admin enforcement
+    // 4. Admin enforcement (standard page requests)
     if path.starts_with("/admin") {
         let user: Option<User> = session.get("user").await.ok().flatten();
         match user {
